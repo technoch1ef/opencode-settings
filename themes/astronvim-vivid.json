@@ -1,0 +1,168 @@
+{
+  "$schema": "https://opencode.ai/theme.json",
+  "defs": {
+    "black": "#000000",
+    "red": "#ff8191",
+    "orange": "#ffa942",
+    "yellow": "#ffcf32",
+    "green": "#b0ff7f",
+    "cyan": "#5efff5",
+    "blue": "#57b6ff",
+    "purple": "#eba0ff",
+    "text": "#ADB0BB",
+    "comment": "#696C76",
+    "mute": "#595C66"
+  },
+  "theme": {
+    "primary": {
+      "dark": "blue"
+    },
+    "secondary": {
+      "dark": "purple"
+    },
+    "accent": {
+      "dark": "cyan"
+    },
+    "error": {
+      "dark": "red"
+    },
+    "warning": {
+      "dark": "orange"
+    },
+    "success": {
+      "dark": "green"
+    },
+    "info": {
+      "dark": "blue"
+    },
+    "text": {
+      "dark": "text"
+    },
+    "textMuted": {
+      "dark": "mute"
+    },
+    "background": {
+      "dark": "black"
+    },
+    "backgroundPanel": {
+      "dark": "black"
+    },
+    "backgroundElement": {
+      "dark": "black"
+    },
+    "border": {
+      "dark": "mute"
+    },
+    "borderActive": {
+      "dark": "comment"
+    },
+    "borderSubtle": {
+      "dark": "mute"
+    },
+    "diffAdded": {
+      "dark": "green"
+    },
+    "diffRemoved": {
+      "dark": "red"
+    },
+    "diffContext": {
+      "dark": "comment"
+    },
+    "diffHunkHeader": {
+      "dark": "comment"
+    },
+    "diffHighlightAdded": {
+      "dark": "green"
+    },
+    "diffHighlightRemoved": {
+      "dark": "red"
+    },
+    "diffAddedBg": {
+      "dark": "#0a3a0a"
+    },
+    "diffRemovedBg": {
+      "dark": "#3a0a0a"
+    },
+    "diffContextBg": {
+      "dark": "black"
+    },
+    "diffLineNumber": {
+      "dark": "mute"
+    },
+    "diffAddedLineNumberBg": {
+      "dark": "#0a3a0a"
+    },
+    "diffRemovedLineNumberBg": {
+      "dark": "#3a0a0a"
+    },
+    "markdownText": {
+      "dark": "text"
+    },
+    "markdownHeading": {
+      "dark": "cyan"
+    },
+    "markdownLink": {
+      "dark": "blue"
+    },
+    "markdownLinkText": {
+      "dark": "blue"
+    },
+    "markdownCode": {
+      "dark": "green"
+    },
+    "markdownBlockQuote": {
+      "dark": "comment"
+    },
+    "markdownEmph": {
+      "dark": "orange"
+    },
+    "markdownStrong": {
+      "dark": "yellow"
+    },
+    "markdownHorizontalRule": {
+      "dark": "comment"
+    },
+    "markdownListItem": {
+      "dark": "blue"
+    },
+    "markdownListEnumeration": {
+      "dark": "cyan"
+    },
+    "markdownImage": {
+      "dark": "purple"
+    },
+    "markdownImageText": {
+      "dark": "purple"
+    },
+    "markdownCodeBlock": {
+      "dark": "text"
+    },
+    "syntaxComment": {
+      "dark": "comment"
+    },
+    "syntaxKeyword": {
+      "dark": "purple"
+    },
+    "syntaxFunction": {
+      "dark": "blue"
+    },
+    "syntaxVariable": {
+      "dark": "cyan"
+    },
+    "syntaxString": {
+      "dark": "green"
+    },
+    "syntaxNumber": {
+      "dark": "orange"
+    },
+    "syntaxType": {
+      "dark": "cyan"
+    },
+    "syntaxOperator": {
+      "dark": "purple"
+    },
+    "syntaxPunctuation": {
+      "dark": "text"
+    }
+  }
+}
