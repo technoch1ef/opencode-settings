@@ -1,6 +1,12 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "plugin": ["opencode-beads"],
+  "permission": {
+    "bash": {
+      "*": "allow",
+      "bd *": "ask"
+    }
+  },
   "agent": {
     "github": {
       "description": "GitHub-focused agent for repository management, PRs, issues, and automation",
