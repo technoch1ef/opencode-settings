@@ -20,7 +20,7 @@ const AGENT_TO_ACTOR: Record<string, string> = {
 
 const SHELL_SNIPPET_LANGS = new Set(["bash", "sh", "zsh", "shell"]);
 
-function fixShellSnippetNewlines(text: string): string {
+export function fixShellSnippetNewlines(text: string): string {
   // `; \nbd ...` is copy/paste-unsafe in shells (\n becomes `n`, e.g. `\nbd` => `nbd`).
   // This normalizes *shell* code fences only, turning the literal `\n` token into
   // a real newline when it is used as a command separator (e.g. `; \n`, `&& \n`).
