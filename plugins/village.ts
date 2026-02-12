@@ -260,7 +260,6 @@ export const VillagePlugin: Plugin = async ({ client }) => {
           workers: tool.schema.number().int().min(1).max(8).optional(),
           overseer: tool.schema.boolean().optional(),
           kick: tool.schema.boolean().optional(),
-          openSessions: tool.schema.boolean().optional(),
           directory: tool.schema.string().optional(),
           note: tool.schema.string().optional(),
         },
@@ -270,7 +269,6 @@ export const VillagePlugin: Plugin = async ({ client }) => {
           const desiredWorkers = args.workers ?? 1;
           const desiredOverseer = args.overseer ?? true;
           const shouldKick = args.kick ?? false;
-          const shouldOpenSessions = args.openSessions ?? true;
 
           if (desiredWorkers > 1) {
             await client.tui.showToast({
@@ -346,17 +344,13 @@ export const VillagePlugin: Plugin = async ({ client }) => {
                 desiredOverseer ? " + overseer" : ""
               }${
                 shouldKick
-                  ? " and kicked them. Use /sessions (ctrl+x l) to jump into each session."
-                  : ". Sessions are idle; run /village:work after opening /sessions (ctrl+x l)."
+                  ? " and kicked them. Navigate: ctrl+x right/left (cycle children), ctrl+x up (back to parent)."
+                  : ". Sessions are idle; navigate to them (ctrl+x right/left) and run /village:work to start."
               }`,
               variant: "success",
               duration: 4000,
             },
           });
-
-          if (shouldOpenSessions) {
-            await client.tui.openSessions();
-          }
 
           const sessions = await listVillageSessions(rootID);
 
@@ -367,9 +361,6 @@ export const VillagePlugin: Plugin = async ({ client }) => {
             shouldKick
               ? "Kicked: yes (work loop prompt sent)"
               : "Kicked: no (sessions are idle; run /village:work manually or use village_wake)",
-            shouldOpenSessions
-              ? "Session selector: opened"
-              : "Session selector: skipped (run /sessions or press ctrl+x l)",
           ];
 
           if (createdWorkers.length || createdOverseers.length) {
@@ -390,7 +381,6 @@ export const VillagePlugin: Plugin = async ({ client }) => {
           "Wake existing village worker/overseer sessions by re-sending their work loop prompt.",
         args: {
           target: tool.schema.enum(["worker", "overseer", "all"] as const).optional(),
-          openSessions: tool.schema.boolean().optional(),
           note: tool.schema.string().optional(),
           directory: tool.schema.string().optional(),
         },
@@ -398,7 +388,6 @@ export const VillagePlugin: Plugin = async ({ client }) => {
           const directory = args.directory ?? context.directory;
           const rootID = await getRootSessionID(context.sessionID);
           const entry = await resolveRegistry(rootID);
-          const shouldOpenSessions = args.openSessions ?? true;
 
           const target = args.target ?? "all";
           const workerIDs = target === "overseer" ? [] : entry.workers;
@@ -429,15 +418,11 @@ export const VillagePlugin: Plugin = async ({ client }) => {
             query: { directory },
             body: {
               title: "Village",
-              message: `Woke ${workerIDs.length} worker(s) and ${overseerIDs.length} overseer(s)`,
+              message: `Woke ${workerIDs.length} worker(s) and ${overseerIDs.length} overseer(s). Navigate: ctrl+x right/left (cycle children), ctrl+x up (back to parent).`,
               variant: "info",
               duration: 2500,
             },
           });
-
-          if (shouldOpenSessions) {
-            await client.tui.openSessions();
-          }
 
           const sessions = await listVillageSessions(rootID);
 
@@ -447,9 +432,6 @@ export const VillagePlugin: Plugin = async ({ client }) => {
             `Woke overseers: ${overseerIDs.join(", ") || "(none)"}`,
             formatSessionList("Workers", sessions.workers),
             formatSessionList("Overseers", sessions.overseers),
-            shouldOpenSessions
-              ? "Session selector: opened"
-              : "Session selector: skipped (run /sessions or press ctrl+x l)",
           ].join("\n");
         },
       }),
