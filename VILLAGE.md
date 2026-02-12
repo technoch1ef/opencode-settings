@@ -25,7 +25,7 @@ Running the workflow
 1. Start OpenCode in your project repo and use `mayor`.
 2. Mayor clarifies scope, drafts an epic + child beads, and creates them with `bd create`.
 3. Mayor delegates by calling `village_spawn`.
-4. Spawned sessions are idle by default. Use `/sessions` (press `ctrl+x l`) to find/switch to each worker/overseer session, then run `/work` to start.
+4. Spawned sessions are idle by default. Use `/sessions` (press `ctrl+x l`) to find/switch to each worker/overseer session, then run `/village:work` to start.
 5. Optional immediate start: use `village_spawn { kick: true }` or later `village_wake`.
 6. Worker implements, commits locally, then reassigns bead to overseer.
 7. Overseer runs checks and either closes the bead or returns it to worker.
@@ -35,6 +35,7 @@ Notes
 - Mayor never makes code/config/doc changes; it only creates beads and delegates work.
 - Spawning multiple workers in the same git working directory can cause conflicts.
 - `village_wake` is the explicit way to re-send the work-loop prompt to existing sessions.
+- `/work` still works as a legacy alias, but `/village:work` is the preferred command.
 
 `/village:kick` shortcut
 
