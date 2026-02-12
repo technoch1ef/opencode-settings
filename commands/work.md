@@ -1,5 +1,5 @@
 ---
-description: "Trigger the village work loop - claim and work on ready beads"
+description: "Deprecated alias for /village:work - triggers the village work loop"
 ---
 
 Check for ready beads assigned to me and start working on the first available one.
