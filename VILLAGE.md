@@ -35,3 +35,11 @@ Notes
 - Mayor never makes code/config/doc changes; it only creates beads and delegates work.
 - Spawning multiple workers in the same git working directory can cause conflicts.
 - `village_wake` is the explicit way to re-send the work-loop prompt to existing sessions.
+
+`/village:kick` shortcut
+
+- Use `/village:kick` to re-send the work-loop prompt via `village_wake` without writing a manual tool call.
+- Examples:
+  - `/village:kick`
+  - `/village:kick overseer`
+  - `/village:kick worker bead-123 ready for review`
