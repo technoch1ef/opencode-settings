@@ -18,6 +18,30 @@ const AGENT_TO_ACTOR: Record<string, string> = {
   overseer: "overseer",
 };
 
+const SHELL_SNIPPET_LANGS = new Set(["bash", "sh", "zsh", "shell"]);
+
+function fixShellSnippetNewlines(text: string): string {
+  // `; \nbd ...` is copy/paste-unsafe in shells (\n becomes `n`, e.g. `\nbd` => `nbd`).
+  // This normalizes *shell* code fences only, turning the literal `\n` token into
+  // a real newline when it is used as a command separator (e.g. `; \n`, `&& \n`).
+  if (!text.includes("\\n")) return text;
+
+  const codeFenceRegex = /```([a-zA-Z0-9_-]+)?\r?\n([\s\S]*?)```/g;
+
+  return text.replace(codeFenceRegex, (full, lang, body) => {
+    const tag = (typeof lang === "string" ? lang : "").toLowerCase();
+    if (!SHELL_SNIPPET_LANGS.has(tag)) return full;
+
+    const fixedBody = String(body)
+      .replace(/([;]|&&|\|\|)[ \t]*\\n[ \t]*/g, "$1\n")
+      .replace(/^\\n[ \t]*/g, "\n");
+
+    const opening = lang ? `\`\`\`${lang}\n` : "```\n";
+    const bodyWithTrailingNewline = fixedBody.endsWith("\n") ? fixedBody : `${fixedBody}\n`;
+    return `${opening}${bodyWithTrailingNewline}` + "```";
+  });
+}
+
 const WORKER_WORK_LOOP_PROMPT = `Check for ready beads assigned to worker and start working on the first available one.
 
 Use this workflow:
@@ -139,6 +163,10 @@ export const VillagePlugin: Plugin = async ({ client }) => {
       if (agent && AGENT_TO_ACTOR[agent]) {
         output.env.BD_ACTOR = AGENT_TO_ACTOR[agent];
       }
+    },
+
+    "experimental.text.complete": async (_input, output) => {
+      output.text = fixShellSnippetNewlines(output.text);
     },
 
     tool: {
