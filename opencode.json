@@ -1,8 +1,12 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-beads"],
+  "plugin": [
+    "opencode-beads"
+  ],
   "skills": {
-    "paths": ["{env:HOME}/.config/opencode/skills-private"]
+    "paths": [
+      "{env:HOME}/.config/opencode/skills-private"
+    ]
   },
   "permission": {
     "bash": {
@@ -34,5 +38,15 @@
       }
     }
   },
-  "instructions": [".opencode/github-rules.md"]
+  "instructions": [
+    ".opencode/github-rules.md"
+  ],
+  "mcp": {
+    "atlassian": {
+      "type": "remote",
+      "url": "https://mcp.atlassian.com/v1/mcp",
+      "enabled": true,
+      "timeout": 30000
+    }
+  }
 }
