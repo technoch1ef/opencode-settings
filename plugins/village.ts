@@ -347,7 +347,7 @@ export const VillagePlugin: Plugin = async ({ client }) => {
               }${
                 shouldKick
                   ? " and kicked them. Use /sessions (ctrl+x l) to jump into each session."
-                  : ". Sessions are idle; run /work after opening /sessions (ctrl+x l)."
+                  : ". Sessions are idle; run /village:work after opening /sessions (ctrl+x l)."
               }`,
               variant: "success",
               duration: 4000,
@@ -366,7 +366,7 @@ export const VillagePlugin: Plugin = async ({ client }) => {
             formatSessionList("Overseers", sessions.overseers),
             shouldKick
               ? "Kicked: yes (work loop prompt sent)"
-              : "Kicked: no (sessions are idle; run /work manually or use village_wake)",
+              : "Kicked: no (sessions are idle; run /village:work manually or use village_wake)",
             shouldOpenSessions
               ? "Session selector: opened"
               : "Session selector: skipped (run /sessions or press ctrl+x l)",
