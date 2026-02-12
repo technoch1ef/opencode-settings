@@ -45,7 +45,7 @@
   "command": {
     "village:kick": {
       "description": "Re-send village work-loop prompts to active sessions",
-      "template": "Wake village sessions by calling `village_wake` once.\n\nArgument parsing:\n- If `$1` is `worker`, `overseer`, or `all`, use it as `target` and treat `$2+` as `note`.\n- Otherwise set `target` to `all` and treat `$1+` as `note`.\n- If no note text remains, omit the `note` field.\n\nCall `village_wake` with:\n- `target`: parsed as above\n- `openSessions`: true\n- optional `note`: only when non-empty\n\nReturn only the `village_wake` tool output in a concise format."
+      "template": "Wake village sessions by calling `village_wake` once.\n\nArgument parsing:\n- Default `target` is `all`.\n- If `$1` is `worker`, `overseer`, or `all`, use it as `target` and treat `$2+` as `note`.\n- Otherwise keep `target` as `all` and treat `$1+` as `note`.\n- If no note text remains, omit the `note` field.\n\nCall `village_wake` with:\n- `target`: parsed as above\n- `openSessions`: true\n- optional `note`: only when non-empty\n\nOutput only the returned `village_wake` result, concisely."
     }
   },
   "mcp": {
