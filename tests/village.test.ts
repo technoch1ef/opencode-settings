@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { fixShellSnippetNewlines } from "./village";
+import { fixShellSnippetNewlines } from "../plugins/village";
 
 describe("fixShellSnippetNewlines", () => {
   test("replaces literal \\n separator tokens in shell code fences", () => {
