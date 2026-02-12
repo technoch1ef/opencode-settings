@@ -20,7 +20,9 @@ const AGENT_TO_ACTOR: Record<string, string> = {
 
 const SHELL_SNIPPET_LANGS = new Set(["bash", "sh", "zsh", "shell"]);
 
-export function fixShellSnippetNewlines(text: string): string {
+export function fixShellSnippetNewlines(text: unknown): unknown {
+  if (typeof text !== "string") return text;
+
   // `; \nbd ...` is copy/paste-unsafe in shells (\n becomes `n`, e.g. `\nbd` => `nbd`).
   // This normalizes *shell* code fences only, turning the literal `\n` token into
   // a real newline when it is used as a command separator (e.g. `; \n`, `&& \n`).
@@ -166,7 +168,8 @@ export const VillagePlugin: Plugin = async ({ client }) => {
     },
 
     "experimental.text.complete": async (_input, output) => {
-      output.text = fixShellSnippetNewlines(output.text);
+      const fixed = fixShellSnippetNewlines(output.text);
+      if (typeof fixed === "string") output.text = fixed;
     },
 
     tool: {

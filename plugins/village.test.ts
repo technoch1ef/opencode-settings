@@ -12,10 +12,16 @@ describe("fixShellSnippetNewlines", () => {
     ].join("\n");
 
     const out = fixShellSnippetNewlines(input);
+    expect(typeof out).toBe("string");
+    if (typeof out !== "string") throw new Error("Expected string output");
 
     expect(out).not.toContain("\\n");
     expect(out).toContain("bd create foo;\n");
     expect(out).toContain("bd update bar --status in_progress");
+  });
+
+  test("is a no-op for non-string inputs", () => {
+    expect(fixShellSnippetNewlines(123 as any)).toBe(123);
   });
 
   test("does not touch non-shell code fences", () => {
