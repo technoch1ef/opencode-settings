@@ -11,7 +11,7 @@ If you were dropped into a new/compacted session, run `bd prime` to recover Bead
 - Agents (role prompts + constraints): `agents/mayor.md`, `agents/worker.md`, `agents/overseer.md`
 - Village plugin (spawn/wake tools + work-loop prompts): `plugins/village.ts`
 - OpenCode config entrypoint: `opencode.json`
-- Slash commands (e.g. `/work`): `commands/`
+- Slash commands (e.g. `/village:work`): `commands/`
 - Public skills: `skills/*/SKILL.md`
 - Private, local-only skills (gitignored): `skills-private/*/SKILL.md`
 - Themes and misc tooling: `themes/`, `tools/`

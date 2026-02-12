@@ -35,7 +35,7 @@ Notes
 - Mayor never makes code/config/doc changes; it only creates beads and delegates work.
 - Spawning multiple workers in the same git working directory can cause conflicts.
 - `village_wake` is the explicit way to re-send the work-loop prompt to existing sessions.
-- `/work` still works as a legacy alias, but `/village:work` is the preferred command.
+- `/work` still works as a legacy alias for backward compatibility only; `/village:work` is the preferred command.
 
 `/village:kick` shortcut
 
