@@ -1,50 +1,308 @@
 /**
  * OpenCode Village Plugin
  *
- * Enables the "Agentic Village" pattern for BakesyDev repositories.
+ * Enables a lightweight "Agentic Village" workflow.
  *
  * Features:
  * - Injects BD_ACTOR environment variable based on current agent
  * - Auto-submits work loop prompt when VILLAGE_AUTORUN=1 is set
+ * - Provides tools to spawn and wake worker/overseer sessions
  */
 
-import type { Plugin } from "@opencode-ai/plugin";
+import { tool, type Plugin } from "@opencode-ai/plugin";
 
 // Agent name to BD_ACTOR mapping
 const AGENT_TO_ACTOR: Record<string, string> = {
   orchestrator: "orchestrator",
-  "app-dev": "app-dev",
-  "api-dev": "api-dev",
+  worker: "worker",
   overseer: "overseer",
 };
 
-// Work loop prompt for worker agents
-const WORK_LOOP_PROMPT = `Check for ready beads assigned to me and start working on the first available one.
+const WORKER_WORK_LOOP_PROMPT = `Check for ready beads assigned to worker and start working on the first available one.
 
 Use this workflow:
-1. Run \`bd list --status ready --assignee <my-assignee>\` to find work
-2. If a bead is found, claim it: \`bd update <id> --claim --status in_progress\`
+1. Run \`bd ready --assignee worker\` to find work
+2. If a bead is found, move it to in_progress: \`bd update <id> --assignee worker --status in_progress\`
 3. Read the bead details and handoff packet
-4. Implement the required changes
-5. Update the bead with progress and mark complete when done
-6. Check for more ready beads and repeat
+4. Load the bead's listed skills
+5. Implement the required changes
+6. Commit locally (no push)
+7. Hand off to overseer:
+   - \`bd comments add <id> "Implementation complete. Ready for review."\`
+   - \`bd update <id> --assignee overseer --status open\`
+8. Wake overseer using \`village_wake\`
+9. Check for more ready beads and repeat
 
 If no ready beads are found, report that and wait for new work.`;
+
+const OVERSEER_WORK_LOOP_PROMPT = `Check for ready beads assigned to overseer and start reviewing the first available one.
+
+Use this workflow:
+1. Run \`bd ready --assignee overseer\` to find work
+2. If a bead is found, move it to in_progress: \`bd update <id> --assignee overseer --status in_progress\`
+3. Read the bead details
+4. Load the bead's listed skills and run the appropriate checks (tests/linters/build)
+5. If approved:
+   - \`bd comments add <id> "Approved. Checks: <...>"\`
+   - \`bd close <id> --reason "Approved"\`
+6. If changes needed:
+   - \`bd comments add <id> "Changes requested: <actionable bullets>"\`
+   - \`bd update <id> --assignee worker --status open\`
+   - wake worker using \`village_wake\`
+
+If no ready beads are found, report that and wait for new work.`;
+
+type SpawnRegistryEntry = {
+  workers: string[];
+  overseers: string[];
+};
+
+function withOptionalNote(prompt: string, note?: string) {
+  if (!note) return prompt;
+  return `${prompt}\n\nNote: ${note}`;
+}
 
 export const VillagePlugin: Plugin = async ({ client }) => {
   // Track sessions where we've already auto-submitted
   const autoSubmittedSessions = new Set<string>();
+  // Track spawned village sessions by orchestrator/root session
+  const registry = new Map<string, SpawnRegistryEntry>();
+
+  async function getSession(id: string) {
+    const res = await client.session.get({ path: { id } });
+    return res.data as any;
+  }
+
+  async function getRootSessionID(sessionID: string) {
+    let cur = sessionID;
+    for (let i = 0; i < 25; i++) {
+      const session = await getSession(cur);
+      const parentID = session?.parentID as string | undefined;
+      if (!parentID) return cur;
+      cur = parentID;
+    }
+    return cur;
+  }
+
+  async function loadRegistryFromChildren(rootID: string): Promise<SpawnRegistryEntry> {
+    const childrenRes = await client.session.children({ path: { id: rootID } });
+    const children = (childrenRes.data || []) as any[];
+
+    const workers = children
+      .filter((s) => typeof s?.title === "string" && s.title.startsWith("village-worker-"))
+      .map((s) => s.id)
+      .filter(Boolean);
+
+    const overseers = children
+      .filter((s) => typeof s?.title === "string" && s.title.startsWith("village-overseer"))
+      .map((s) => s.id)
+      .filter(Boolean);
+
+    const entry = { workers, overseers };
+    registry.set(rootID, entry);
+    return entry;
+  }
+
+  async function resolveRegistry(rootID: string): Promise<SpawnRegistryEntry> {
+    const existing = registry.get(rootID);
+    if (existing) return existing;
+    return loadRegistryFromChildren(rootID);
+  }
+
+  async function kickSession(args: {
+    sessionID: string;
+    directory: string;
+    agent: "worker" | "overseer";
+    prompt: string;
+    note?: string;
+  }) {
+    await client.session.promptAsync({
+      path: { id: args.sessionID },
+      query: { directory: args.directory },
+      body: {
+        agent: args.agent,
+        parts: [{ type: "text", text: withOptionalNote(args.prompt, args.note) }],
+      },
+    });
+  }
 
   return {
     // Inject BD_ACTOR based on current agent
     "shell.env": async (input, output) => {
-      // Get agent from session context if available
       // The agent name comes from the current session's agent setting
       const agent = (input as any).agent;
-      
       if (agent && AGENT_TO_ACTOR[agent]) {
         output.env.BD_ACTOR = AGENT_TO_ACTOR[agent];
       }
+    },
+
+    tool: {
+      village_spawn: tool({
+        description:
+          "Spawn village worker/overseer sessions under the current orchestrator session and kick off their work loops.",
+        args: {
+          workers: tool.schema.number().int().min(1).max(8).optional(),
+          overseer: tool.schema.boolean().optional(),
+          directory: tool.schema.string().optional(),
+          note: tool.schema.string().optional(),
+        },
+        async execute(args, context) {
+          const directory = args.directory ?? context.directory;
+          const rootID = await getRootSessionID(context.sessionID);
+          const desiredWorkers = args.workers ?? 1;
+          const desiredOverseer = args.overseer ?? true;
+
+          if (desiredWorkers > 1) {
+            await client.tui.showToast({
+              query: { directory },
+              body: {
+                title: "Village",
+                message:
+                  "Spawning multiple workers in the same directory can cause git conflicts.",
+                variant: "warning",
+                duration: 5000,
+              },
+            });
+          }
+
+          const entry = await resolveRegistry(rootID);
+          const createdWorkers: string[] = [];
+          while (entry.workers.length < desiredWorkers) {
+            const idx = entry.workers.length + 1;
+            const created = await client.session.create({
+              query: { directory },
+              body: {
+                parentID: rootID,
+                title: `village-worker-${idx}`,
+              },
+            });
+            entry.workers.push(created.data.id);
+            createdWorkers.push(created.data.id);
+          }
+
+          const createdOverseers: string[] = [];
+          if (desiredOverseer && entry.overseers.length < 1) {
+            const created = await client.session.create({
+              query: { directory },
+              body: {
+                parentID: rootID,
+                title: "village-overseer",
+              },
+            });
+            entry.overseers.push(created.data.id);
+            createdOverseers.push(created.data.id);
+          }
+
+          // Kick all sessions (existing + newly created) so spawn is idempotent.
+          await Promise.all([
+            ...entry.workers.map((id) =>
+              kickSession({
+                sessionID: id,
+                directory,
+                agent: "worker",
+                prompt: WORKER_WORK_LOOP_PROMPT,
+                note: args.note,
+              })
+            ),
+            ...entry.overseers.map((id) =>
+              kickSession({
+                sessionID: id,
+                directory,
+                agent: "overseer",
+                prompt: OVERSEER_WORK_LOOP_PROMPT,
+                note: args.note,
+              })
+            ),
+          ]);
+
+          registry.set(rootID, entry);
+
+          await client.tui.showToast({
+            query: { directory },
+            body: {
+              title: "Village",
+              message: `Spawned/activated ${entry.workers.length} worker(s)${
+                desiredOverseer ? " + overseer" : ""
+              }`,
+              variant: "success",
+              duration: 4000,
+            },
+          });
+
+          const lines = [
+            `Root session: ${rootID}`,
+            `Workers: ${entry.workers.join(", ") || "(none)"}`,
+            `Overseers: ${entry.overseers.join(", ") || "(none)"}`,
+          ];
+
+          if (createdWorkers.length || createdOverseers.length) {
+            lines.push(
+              `Created: ${[
+                ...createdWorkers.map((id) => `worker:${id}`),
+                ...createdOverseers.map((id) => `overseer:${id}`),
+              ].join(", ")}`
+            );
+          }
+
+          return lines.join("\n");
+        },
+      }),
+
+      village_wake: tool({
+        description:
+          "Wake existing village worker/overseer sessions by re-sending their work loop prompt.",
+        args: {
+          target: tool.schema.enum(["worker", "overseer", "all"] as const).optional(),
+          note: tool.schema.string().optional(),
+          directory: tool.schema.string().optional(),
+        },
+        async execute(args, context) {
+          const directory = args.directory ?? context.directory;
+          const rootID = await getRootSessionID(context.sessionID);
+          const entry = await resolveRegistry(rootID);
+
+          const target = args.target ?? "all";
+          const workerIDs = target === "overseer" ? [] : entry.workers;
+          const overseerIDs = target === "worker" ? [] : entry.overseers;
+
+          await Promise.all([
+            ...workerIDs.map((id) =>
+              kickSession({
+                sessionID: id,
+                directory,
+                agent: "worker",
+                prompt: WORKER_WORK_LOOP_PROMPT,
+                note: args.note,
+              })
+            ),
+            ...overseerIDs.map((id) =>
+              kickSession({
+                sessionID: id,
+                directory,
+                agent: "overseer",
+                prompt: OVERSEER_WORK_LOOP_PROMPT,
+                note: args.note,
+              })
+            ),
+          ]);
+
+          await client.tui.showToast({
+            query: { directory },
+            body: {
+              title: "Village",
+              message: `Woke ${workerIDs.length} worker(s) and ${overseerIDs.length} overseer(s)`,
+              variant: "info",
+              duration: 2500,
+            },
+          });
+
+          return [
+            `Root session: ${rootID}`,
+            `Woke workers: ${workerIDs.join(", ") || "(none)"}`,
+            `Woke overseers: ${overseerIDs.join(", ") || "(none)"}`,
+          ].join("\n");
+        },
+      }),
     },
 
     // Auto-submit work loop when VILLAGE_AUTORUN=1
@@ -66,46 +324,26 @@ export const VillagePlugin: Plugin = async ({ client }) => {
       // Get session to check agent
       try {
         const session = await client.session.get({ path: { id: sessionID } });
-        const agent = (session.data as any)?.agent;
+        const agent = (session.data as any)?.agent as string | undefined;
 
-        // Only auto-run for worker agents, not orchestrator
+        // Only auto-run for worker/overseer agents, not orchestrator
         if (!agent || agent === "orchestrator") return;
         if (!AGENT_TO_ACTOR[agent]) return;
+
+        const prompt = agent === "overseer" ? OVERSEER_WORK_LOOP_PROMPT : WORKER_WORK_LOOP_PROMPT;
 
         // Auto-submit the work loop prompt
         await client.session.prompt({
           path: { id: sessionID },
           body: {
-            parts: [{ type: "text", text: WORK_LOOP_PROMPT }],
+            agent,
+            parts: [{ type: "text", text: prompt }],
           },
         });
       } catch (err) {
         // Silent fail - autorun is a convenience, not critical
         console.error("[village] Auto-run failed:", err);
       }
-    },
-
-    // Expose config for agents to see village status
-    config: async (config) => {
-      // Add a note about village mode in instructions
-      const villageNote = `
-## Village Mode
-
-You are part of the BakesyDev Agentic Village. Your BD_ACTOR is automatically set based on your agent name.
-
-Available agents:
-- **orchestrator**: Plans work, creates beads, delegates to workers
-- **app-dev**: React Web/Native development (bakesy-apps)
-- **api-dev**: Rails backend development (bakesy-api)
-- **overseer**: Read-only validation and code review
-
-Use \`bd\` commands to interact with beads. When VILLAGE_AUTORUN=1 is set, worker agents automatically claim and work on ready beads.
-`;
-
-      if (!config.instructions) {
-        config.instructions = [];
-      }
-      // Note: This adds to system prompt if instructions supports strings
     },
   };
 };

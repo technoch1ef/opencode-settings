@@ -1,11 +1,22 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "plugin": ["opencode-beads"],
+  "skills": {
+    "paths": ["{env:HOME}/.config/opencode/skills-private"]
+  },
   "permission": {
     "bash": {
       "*": "allow",
-      "bd *": "ask"
-    }
+      "bd *": "ask",
+      "bd ready*": "allow",
+      "bd list*": "allow",
+      "bd show*": "allow"
+    },
+    "skill": {
+      "*": "allow"
+    },
+    "village_spawn": "allow",
+    "village_wake": "allow"
   },
   "agent": {
     "github": {
