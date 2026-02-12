@@ -13,7 +13,7 @@ import { tool, type Plugin } from "@opencode-ai/plugin";
 
 // Agent name to BD_ACTOR mapping
 const AGENT_TO_ACTOR: Record<string, string> = {
-  orchestrator: "orchestrator",
+  mayor: "mayor",
   worker: "worker",
   overseer: "overseer",
 };
@@ -65,7 +65,7 @@ function withOptionalNote(prompt: string, note?: string) {
 export const VillagePlugin: Plugin = async ({ client }) => {
   // Track sessions where we've already auto-submitted
   const autoSubmittedSessions = new Set<string>();
-  // Track spawned village sessions by orchestrator/root session
+  // Track spawned village sessions by mayor/root session
   const registry = new Map<string, SpawnRegistryEntry>();
 
   async function getSession(id: string) {
@@ -139,7 +139,7 @@ export const VillagePlugin: Plugin = async ({ client }) => {
     tool: {
       village_spawn: tool({
         description:
-          "Spawn village worker/overseer sessions under the current orchestrator session and kick off their work loops.",
+          "Spawn village worker/overseer sessions under the current mayor session and kick off their work loops.",
         args: {
           workers: tool.schema.number().int().min(1).max(8).optional(),
           overseer: tool.schema.boolean().optional(),
@@ -326,8 +326,8 @@ export const VillagePlugin: Plugin = async ({ client }) => {
         const session = await client.session.get({ path: { id: sessionID } });
         const agent = (session.data as any)?.agent as string | undefined;
 
-        // Only auto-run for worker/overseer agents, not orchestrator
-        if (!agent || agent === "orchestrator") return;
+        // Only auto-run for worker/overseer agents, not mayor
+        if (!agent || agent === "mayor") return;
         if (!AGENT_TO_ACTOR[agent]) return;
 
         const prompt = agent === "overseer" ? OVERSEER_WORK_LOOP_PROMPT : WORKER_WORK_LOOP_PROMPT;

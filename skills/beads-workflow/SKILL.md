@@ -24,12 +24,12 @@ Include these sections in every implementation bead:
 ```
 
 ## Roles
-- Orchestrator: research, ask clarifying questions, draft epic + child beads, include `## Skills`, spawn workers
+- Mayor: research, ask clarifying questions, draft epic + child beads, include `## Skills`, spawn workers
 - Worker: implement bead only; may create local commits; no pushes; no test runs
 - Overseer: run linters/tests/build; approve or send back; close beads
 
 ## Status + assignee flow (recommended)
-- Orchestrator creates child beads assigned to `worker` (status defaults to `open`)
+- Mayor creates child beads assigned to `worker` (status defaults to `open`)
 - Worker:
   - Start work: `bd update <id> --assignee worker --status in_progress`
   - Handoff: `bd update <id> --assignee overseer --status open`
