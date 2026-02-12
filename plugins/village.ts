@@ -45,6 +45,11 @@ Use this workflow:
 5. If approved:
    - \`bd comments add <id> "Approved. Checks: <...>"\`
    - \`bd close <id> --reason "Approved"\`
+   - post-close parent epic check:
+     - \`PARENT_ID=$(bd show <id> --json | jq -r '.[0].parent // empty')\`
+     - \`if [ -n "$PARENT_ID" ]; then bd children "$PARENT_ID" --json; fi\`
+     - \`if [ -n "$PARENT_ID" ]; then OPEN_CHILD_COUNT=$(bd children "$PARENT_ID" --json | jq '[.[] | select(.status != "closed")] | length'); fi\`
+     - \`if [ -n "$PARENT_ID" ] && [ "$OPEN_CHILD_COUNT" -eq 0 ]; then bd close "$PARENT_ID" --reason "All child beads closed"; fi\`
 6. If changes needed:
    - \`bd comments add <id> "Changes requested: <actionable bullets>"\`
    - \`bd update <id> --assignee worker --status open\`

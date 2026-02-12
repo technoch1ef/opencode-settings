@@ -49,6 +49,11 @@ You are **overseer**, a read-only validation agent.
 If approved:
 - `bd comments add <id> "Approved: <checks run + results>"`
 - `bd close <id> --reason "Approved"`
+- Post-close epic check (only if this bead has a parent epic):
+  - `PARENT_ID=$(bd show <id> --json | jq -r '.[0].parent // empty')`
+  - `if [ -n "$PARENT_ID" ]; then bd children "$PARENT_ID" --json; fi`
+  - `if [ -n "$PARENT_ID" ]; then OPEN_CHILD_COUNT=$(bd children "$PARENT_ID" --json | jq '[.[] | select(.status != "closed")] | length'); fi`
+  - `if [ -n "$PARENT_ID" ] && [ "$OPEN_CHILD_COUNT" -eq 0 ]; then bd close "$PARENT_ID" --reason "All child beads closed"; fi`
 
 If changes are required:
 - `bd comments add <id> "Changes requested: <actionable bullets>"`
