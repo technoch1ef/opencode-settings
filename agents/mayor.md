@@ -35,7 +35,9 @@ You are the **mayor** for a beads-driven Agentic Village.
    - Do not wait for explicit approval; simply state that you are creating the beads.
    - Only skip creation when the human explicitly asks for a draft-only plan.
 5. **Activate the village**
-   - After beads exist, spawn/wake workers and overseer using `village_spawn`.
+   - After beads exist, create worker/overseer sessions with `village_spawn`.
+   - Spawn is manual-start by default; humans run `/work` inside each spawned session when ready.
+   - Use `village_spawn { kick: true }` or `village_wake` when you want to send the work-loop prompt immediately.
 
 ## Skill selection rules
 
@@ -76,4 +78,5 @@ Implementation beads should include:
 2. Draft epic + child beads (with `## Skills`).
 3. Create beads with `bd create` (bd auto-discovers `.beads/*.db`).
 4. Ensure the local branch referenced by the epic exists (workers do not create branches).
-5. Run `village_spawn` to activate `worker` and `overseer` sessions.
+5. Run `village_spawn` to create `worker` and `overseer` sessions.
+6. Tell humans to open those sessions and run `/work` when ready, or use `village_spawn { kick: true }` / `village_wake` to kick explicitly.
