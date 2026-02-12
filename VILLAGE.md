@@ -48,8 +48,9 @@ Notes
 `/village:orphans` shortcut
 
 - Use `/village:orphans` to report non-epic open/in-progress beads that are unassigned, plus beads assigned outside `worker`/`overseer`.
-- Use `/village:orphans fix` to auto-assign only truly unassigned beads with a safe heuristic.
-- It does not reshuffle existing assignments.
+- The report also surfaces ignored epics for observability (epics are never auto-assigned).
+- Use `/village:orphans fix` to auto-assign only truly unassigned non-epic beads with a safe heuristic.
+- It does not reshuffle existing assignments or modify epics.
 - Examples:
   - `/village:orphans`
   - `/village:orphans fix`
