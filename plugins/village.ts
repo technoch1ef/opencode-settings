@@ -98,15 +98,65 @@ function withOptionalNote(prompt: string, note?: string) {
   return `${prompt}\n\nNote: ${note}`;
 }
 
+function isVillageSessionTitle(title: unknown): title is string {
+  return (
+    typeof title === "string" &&
+    (title.startsWith("village-worker-") || title.startsWith("village-overseer"))
+  );
+}
+
 export const VillagePlugin: Plugin = async ({ client }) => {
   // Track sessions where we've already auto-submitted
   const autoSubmittedSessions = new Set<string>();
   // Track spawned village sessions by mayor/root session
   const registry = new Map<string, SpawnRegistryEntry>();
+  // Track dedupe keys for village session notifications
+  const seenErrorKeys = new Set<string>();
+  const lastVillageStatus = new Map<string, string>();
 
   async function getSession(id: string) {
     const res = await client.session.get({ path: { id } });
     return res.data as any;
+  }
+
+  async function getVillageSessionSummary(sessionID: string): Promise<SessionSummary | null> {
+    try {
+      const session = await getSession(sessionID);
+      if (!isVillageSessionTitle(session?.title)) return null;
+      return { id: sessionID, title: session.title };
+    } catch {
+      return null;
+    }
+  }
+
+  async function showVillageToast(args: {
+    sessionID: string;
+    title: string;
+    message: string;
+    variant: "info" | "warning" | "success" | "error";
+    duration: number;
+  }) {
+    try {
+      const session = await getSession(args.sessionID);
+      const directory =
+        typeof session?.directory === "string"
+          ? session.directory
+          : typeof session?.cwd === "string"
+            ? session.cwd
+            : undefined;
+      if (!directory) return;
+      await client.tui.showToast({
+        query: { directory },
+        body: {
+          title: args.title,
+          message: args.message,
+          variant: args.variant,
+          duration: args.duration,
+        },
+      });
+    } catch {
+      // Non-critical UX signal.
+    }
   }
 
   async function getRootSessionID(sessionID: string) {
@@ -423,6 +473,80 @@ export const VillagePlugin: Plugin = async ({ client }) => {
 
     // Auto-submit work loop when VILLAGE_AUTORUN=1
     event: async ({ event }) => {
+      const properties = (event.properties ?? {}) as any;
+
+      if (event.type === "session.error") {
+        const sessionID =
+          typeof properties.sessionID === "string"
+            ? properties.sessionID
+            : typeof properties.id === "string"
+              ? properties.id
+              : undefined;
+        if (!sessionID) return;
+
+        const session = await getVillageSessionSummary(sessionID);
+        if (!session) return;
+
+        const errorText =
+          typeof properties.error === "string"
+            ? properties.error
+            : typeof properties.message === "string"
+              ? properties.message
+              : typeof properties.error?.message === "string"
+                ? properties.error.message
+                : "Unknown error";
+
+        const dedupeKey = `${session.id}:${errorText}`;
+        if (seenErrorKeys.has(dedupeKey)) return;
+        seenErrorKeys.add(dedupeKey);
+
+        await showVillageToast({
+          sessionID,
+          title: "Village session error",
+          message: `${session.title} (${session.id}) failed: ${errorText}`,
+          variant: "error",
+          duration: 5000,
+        });
+        return;
+      }
+
+      if (event.type === "session.status") {
+        const sessionID =
+          typeof properties.sessionID === "string"
+            ? properties.sessionID
+            : typeof properties.id === "string"
+              ? properties.id
+              : undefined;
+        if (!sessionID) return;
+
+        const session = await getVillageSessionSummary(sessionID);
+        if (!session) return;
+
+        const status =
+          typeof properties.status === "string"
+            ? properties.status
+            : typeof properties.next === "string"
+              ? properties.next
+              : undefined;
+        if (!status) return;
+
+        const previous = lastVillageStatus.get(sessionID);
+        if (previous === status) return;
+        lastVillageStatus.set(sessionID, status);
+
+        // Keep this low-noise: only signal meaningful transitions.
+        if (previous === "running" && status === "idle") {
+          await showVillageToast({
+            sessionID,
+            title: "Village session idle",
+            message: `${session.title} (${session.id}) is now idle`,
+            variant: "info",
+            duration: 2500,
+          });
+        }
+        return;
+      }
+
       // Only trigger on server connected (startup)
       if (event.type !== "server.connected") return;
 
@@ -430,7 +554,7 @@ export const VillagePlugin: Plugin = async ({ client }) => {
       if (process.env.VILLAGE_AUTORUN !== "1") return;
 
       // Get current session info
-      const sessionID = (event.properties as any)?.sessionID;
+      const sessionID = properties?.sessionID;
       if (!sessionID) return;
 
       // Don't auto-submit twice for same session
