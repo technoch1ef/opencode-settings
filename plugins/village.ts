@@ -88,6 +88,11 @@ type SpawnRegistryEntry = {
   overseers: string[];
 };
 
+type SessionSummary = {
+  id: string;
+  title: string;
+};
+
 function withOptionalNote(prompt: string, note?: string) {
   if (!note) return prompt;
   return `${prompt}\n\nNote: ${note}`;
@@ -140,6 +145,31 @@ export const VillagePlugin: Plugin = async ({ client }) => {
     return loadRegistryFromChildren(rootID);
   }
 
+  async function listVillageSessions(rootID: string): Promise<{
+    workers: SessionSummary[];
+    overseers: SessionSummary[];
+  }> {
+    const childrenRes = await client.session.children({ path: { id: rootID } });
+    const children = (childrenRes.data || []) as any[];
+
+    const workers = children
+      .filter((s) => typeof s?.title === "string" && s.title.startsWith("village-worker-"))
+      .map((s) => ({ id: String(s.id), title: String(s.title) }))
+      .filter((s) => s.id);
+
+    const overseers = children
+      .filter((s) => typeof s?.title === "string" && s.title.startsWith("village-overseer"))
+      .map((s) => ({ id: String(s.id), title: String(s.title) }))
+      .filter((s) => s.id);
+
+    return { workers, overseers };
+  }
+
+  function formatSessionList(label: string, sessions: SessionSummary[]): string {
+    if (!sessions.length) return `${label}: (none)`;
+    return `${label}: ${sessions.map((s) => `${s.title} (${s.id})`).join(", ")}`;
+  }
+
   async function kickSession(args: {
     sessionID: string;
     directory: string;
@@ -180,6 +210,7 @@ export const VillagePlugin: Plugin = async ({ client }) => {
           workers: tool.schema.number().int().min(1).max(8).optional(),
           overseer: tool.schema.boolean().optional(),
           kick: tool.schema.boolean().optional(),
+          openSessions: tool.schema.boolean().optional(),
           directory: tool.schema.string().optional(),
           note: tool.schema.string().optional(),
         },
@@ -189,6 +220,7 @@ export const VillagePlugin: Plugin = async ({ client }) => {
           const desiredWorkers = args.workers ?? 1;
           const desiredOverseer = args.overseer ?? true;
           const shouldKick = args.kick ?? false;
+          const shouldOpenSessions = args.openSessions ?? true;
 
           if (desiredWorkers > 1) {
             await client.tui.showToast({
@@ -262,19 +294,32 @@ export const VillagePlugin: Plugin = async ({ client }) => {
               title: "Village",
               message: `Spawned ${entry.workers.length} worker(s)${
                 desiredOverseer ? " + overseer" : ""
-              }${shouldKick ? " and kicked them" : ". Run /work in each session to start."}`,
+              }${
+                shouldKick
+                  ? " and kicked them. Use /sessions (ctrl+x l) to jump into each session."
+                  : ". Sessions are idle; run /work after opening /sessions (ctrl+x l)."
+              }`,
               variant: "success",
               duration: 4000,
             },
           });
 
+          if (shouldOpenSessions) {
+            await client.tui.openSessions();
+          }
+
+          const sessions = await listVillageSessions(rootID);
+
           const lines = [
             `Root session: ${rootID}`,
-            `Workers: ${entry.workers.join(", ") || "(none)"}`,
-            `Overseers: ${entry.overseers.join(", ") || "(none)"}`,
+            formatSessionList("Workers", sessions.workers),
+            formatSessionList("Overseers", sessions.overseers),
             shouldKick
               ? "Kicked: yes (work loop prompt sent)"
               : "Kicked: no (sessions are idle; run /work manually or use village_wake)",
+            shouldOpenSessions
+              ? "Session selector: opened"
+              : "Session selector: skipped (run /sessions or press ctrl+x l)",
           ];
 
           if (createdWorkers.length || createdOverseers.length) {
@@ -295,6 +340,7 @@ export const VillagePlugin: Plugin = async ({ client }) => {
           "Wake existing village worker/overseer sessions by re-sending their work loop prompt.",
         args: {
           target: tool.schema.enum(["worker", "overseer", "all"] as const).optional(),
+          openSessions: tool.schema.boolean().optional(),
           note: tool.schema.string().optional(),
           directory: tool.schema.string().optional(),
         },
@@ -302,6 +348,7 @@ export const VillagePlugin: Plugin = async ({ client }) => {
           const directory = args.directory ?? context.directory;
           const rootID = await getRootSessionID(context.sessionID);
           const entry = await resolveRegistry(rootID);
+          const shouldOpenSessions = args.openSessions ?? true;
 
           const target = args.target ?? "all";
           const workerIDs = target === "overseer" ? [] : entry.workers;
@@ -338,10 +385,37 @@ export const VillagePlugin: Plugin = async ({ client }) => {
             },
           });
 
+          if (shouldOpenSessions) {
+            await client.tui.openSessions();
+          }
+
+          const sessions = await listVillageSessions(rootID);
+
           return [
             `Root session: ${rootID}`,
             `Woke workers: ${workerIDs.join(", ") || "(none)"}`,
             `Woke overseers: ${overseerIDs.join(", ") || "(none)"}`,
+            formatSessionList("Workers", sessions.workers),
+            formatSessionList("Overseers", sessions.overseers),
+            shouldOpenSessions
+              ? "Session selector: opened"
+              : "Session selector: skipped (run /sessions or press ctrl+x l)",
+          ].join("\n");
+        },
+      }),
+
+      village_status: tool({
+        description:
+          "List village sessions under the current root session (IDs and titles).",
+        args: {},
+        async execute(_args, context) {
+          const rootID = await getRootSessionID(context.sessionID);
+          const sessions = await listVillageSessions(rootID);
+
+          return [
+            `Root session: ${rootID}`,
+            formatSessionList("Workers", sessions.workers),
+            formatSessionList("Overseers", sessions.overseers),
           ].join("\n");
         },
       }),
