@@ -44,3 +44,12 @@ Notes
   - `/village:kick`
   - `/village:kick overseer`
   - `/village:kick worker bead-123 ready for review`
+
+`/village:orphans` shortcut
+
+- Use `/village:orphans` to report non-epic open/in-progress beads that are unassigned, plus beads assigned outside `worker`/`overseer`.
+- Use `/village:orphans fix` to auto-assign only truly unassigned beads with a safe heuristic.
+- It does not reshuffle existing assignments.
+- Examples:
+  - `/village:orphans`
+  - `/village:orphans fix`
