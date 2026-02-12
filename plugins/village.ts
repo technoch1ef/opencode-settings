@@ -144,10 +144,11 @@ export const VillagePlugin: Plugin = async ({ client }) => {
     tool: {
       village_spawn: tool({
         description:
-          "Spawn village worker/overseer sessions under the current mayor session and kick off their work loops.",
+          "Spawn village worker/overseer sessions under the current mayor session. Sessions stay idle unless kick=true.",
         args: {
           workers: tool.schema.number().int().min(1).max(8).optional(),
           overseer: tool.schema.boolean().optional(),
+          kick: tool.schema.boolean().optional(),
           directory: tool.schema.string().optional(),
           note: tool.schema.string().optional(),
         },
@@ -156,6 +157,7 @@ export const VillagePlugin: Plugin = async ({ client }) => {
           const rootID = await getRootSessionID(context.sessionID);
           const desiredWorkers = args.workers ?? 1;
           const desiredOverseer = args.overseer ?? true;
+          const shouldKick = args.kick ?? false;
 
           if (desiredWorkers > 1) {
             await client.tui.showToast({
@@ -198,27 +200,28 @@ export const VillagePlugin: Plugin = async ({ client }) => {
             createdOverseers.push(created.data.id);
           }
 
-          // Kick all sessions (existing + newly created) so spawn is idempotent.
-          await Promise.all([
-            ...entry.workers.map((id) =>
-              kickSession({
-                sessionID: id,
-                directory,
-                agent: "worker",
-                prompt: WORKER_WORK_LOOP_PROMPT,
-                note: args.note,
-              })
-            ),
-            ...entry.overseers.map((id) =>
-              kickSession({
-                sessionID: id,
-                directory,
-                agent: "overseer",
-                prompt: OVERSEER_WORK_LOOP_PROMPT,
-                note: args.note,
-              })
-            ),
-          ]);
+          if (shouldKick) {
+            await Promise.all([
+              ...entry.workers.map((id) =>
+                kickSession({
+                  sessionID: id,
+                  directory,
+                  agent: "worker",
+                  prompt: WORKER_WORK_LOOP_PROMPT,
+                  note: args.note,
+                })
+              ),
+              ...entry.overseers.map((id) =>
+                kickSession({
+                  sessionID: id,
+                  directory,
+                  agent: "overseer",
+                  prompt: OVERSEER_WORK_LOOP_PROMPT,
+                  note: args.note,
+                })
+              ),
+            ]);
+          }
 
           registry.set(rootID, entry);
 
@@ -226,9 +229,9 @@ export const VillagePlugin: Plugin = async ({ client }) => {
             query: { directory },
             body: {
               title: "Village",
-              message: `Spawned/activated ${entry.workers.length} worker(s)${
+              message: `Spawned ${entry.workers.length} worker(s)${
                 desiredOverseer ? " + overseer" : ""
-              }`,
+              }${shouldKick ? " and kicked them" : ". Run /work in each session to start."}`,
               variant: "success",
               duration: 4000,
             },
@@ -238,6 +241,9 @@ export const VillagePlugin: Plugin = async ({ client }) => {
             `Root session: ${rootID}`,
             `Workers: ${entry.workers.join(", ") || "(none)"}`,
             `Overseers: ${entry.overseers.join(", ") || "(none)"}`,
+            shouldKick
+              ? "Kicked: yes (work loop prompt sent)"
+              : "Kicked: no (sessions are idle; run /work manually or use village_wake)",
           ];
 
           if (createdWorkers.length || createdOverseers.length) {
