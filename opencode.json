@@ -43,6 +43,10 @@
     ".opencode/github-rules.md"
   ],
   "command": {
+    "village:work": {
+      "description": "Trigger the village work loop for your role",
+      "template": "Check for ready beads assigned to me and start working on the first available one.\n\nUse this workflow:\n1. Determine your assignee and list ready beads:\n   - Worker: `bd ready --assignee worker`\n   - Overseer: `bd ready --assignee overseer`\n2. If a bead is found, move it to in_progress: `bd update <id> --status in_progress`\n3. Read the bead details and handoff packet\n4. Load skills listed under `## Skills`\n5. Do the work for your role (worker: implement + local commit; overseer: run checks + approve/return)\n6. Update the bead status and comments\n7. Check for more ready beads and repeat\n\nIf no ready beads are found, report that and wait for new work."
+    },
     "village:kick": {
       "description": "Re-send village work-loop prompts to active sessions",
       "template": "Wake village sessions by calling `village_wake` once.\n\nArgument parsing:\n- Default `target` is `all`.\n- If `$1` is `worker`, `overseer`, or `all`, use it as `target` and treat `$2+` as `note`.\n- Otherwise keep `target` as `all` and treat `$1+` as `note`.\n- If no note text remains, omit the `note` field.\n\nCall `village_wake` with:\n- `target`: parsed as above\n- `openSessions`: true\n- optional `note`: only when non-empty\n\nOutput only the returned `village_wake` result, concisely."
