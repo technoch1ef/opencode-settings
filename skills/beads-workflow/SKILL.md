@@ -24,7 +24,7 @@ Include these sections in every implementation bead:
 ```
 
 ## Roles
-- Mayor: research, ask clarifying questions, draft epic + child beads, include `## Skills`, spawn workers
+- Mayor: research, ask clarifying questions, draft epic + child beads, include `## Skills`, create beads with `bd`, spawn workers; no code changes
 - Worker: implement bead only; may create local commits; no pushes; no test runs
 - Overseer: run linters/tests/build; approve or send back; close beads
 

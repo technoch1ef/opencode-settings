@@ -23,12 +23,12 @@ Private skills
 Running the workflow
 
 1. Start OpenCode in your project repo and use `mayor`.
-2. Mayor drafts epic + child beads (each bead includes `## Skills`).
-3. After human approval, mayor creates beads with `bd create`.
-4. Mayor activates the village by calling `village_spawn`.
-5. Worker implements, commits locally, then reassigns bead to overseer.
-6. Overseer runs checks and either closes the bead or returns it to worker.
+2. Mayor clarifies scope, drafts an epic + child beads, and creates them with `bd create`.
+3. Mayor delegates by calling `village_spawn`.
+4. Worker implements, commits locally, then reassigns bead to overseer.
+5. Overseer runs checks and either closes the bead or returns it to worker.
 
 Notes
 
+- Mayor never makes code/config/doc changes; it only creates beads and delegates work.
 - Spawning multiple workers in the same git working directory can cause conflicts.
