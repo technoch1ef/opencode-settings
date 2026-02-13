@@ -29,6 +29,9 @@ type BdIssue = {
   priority?: number;
   created_at?: string;
   assignee?: string;
+  issue_type?: string;
+  description?: string;
+  notes?: string;
 };
 
 function compareBdIssuesDeterministic(a: BdIssue, b: BdIssue): number {
@@ -52,6 +55,20 @@ function formatIssueLine(issue: BdIssue): string {
   const title = (issue.title ?? "").replace(/\s+/g, " ").trim();
   const status = (issue.status ?? "").trim();
   return `${id} | ${title || "(no title)"} | ${status || "(no status)"}`;
+}
+
+function formatOrphansRow(issue: BdIssue): string {
+  const id = issue.id;
+  const title = (issue.title ?? "").replace(/\s+/g, " ").trim() || "(no title)";
+  const status = (issue.status ?? "").trim() || "(no status)";
+  const assignee = (issue.assignee ?? "").trim() || "(unassigned)";
+  return `${id} | ${title} | ${status} | ${assignee}`;
+}
+
+function inferAssigneeFromText(text: string): "worker" | "overseer" {
+  const t = text.toLowerCase();
+  const keywords = ["review", "verify", "verification", "check", "checks", "overseer", "approve"];
+  return keywords.some((k) => t.includes(k)) ? "overseer" : "worker";
 }
 
 async function execFileText(
@@ -616,6 +633,129 @@ export const VillagePlugin: Plugin = async ({ client }) => {
                 String(err?.message ?? err)
             );
           }
+        },
+      }),
+
+      village_orphans: tool({
+        description:
+          "Report orphan/suspect-assignee beads (open + in_progress) and optionally fix unassigned non-epics.",
+        args: {
+          fix: tool.schema.boolean().optional(),
+          limit: tool.schema.number().int().min(1).max(200).optional(),
+          directory: tool.schema.string().optional(),
+        },
+        async execute(args, context) {
+          const directory = args.directory ?? context.directory;
+          const session = await getSession(context.sessionID);
+          const sessionAgent = (session as any)?.agent as string | undefined;
+          const actor = sessionAgent && AGENT_TO_ACTOR[sessionAgent] ? AGENT_TO_ACTOR[sessionAgent] : undefined;
+
+          let openIssues: BdIssue[] = [];
+          let inProgressIssues: BdIssue[] = [];
+          try {
+            openIssues = await execBdJson<BdIssue[]>(["list", "--status", "open", "--json"], {
+              cwd: directory,
+              actor,
+            });
+            inProgressIssues = await execBdJson<BdIssue[]>(
+              ["list", "--status", "in_progress", "--json"],
+              { cwd: directory, actor }
+            );
+          } catch (err: any) {
+            const msg = String(err?.message ?? err);
+            if (msg.toLowerCase().includes("enoent") && msg.toLowerCase().includes("bd")) {
+              return "bd not available; cannot inspect beads.";
+            }
+            if (msg.includes(".beads") && msg.toLowerCase().includes("missing")) {
+              return "No .beads database found; nothing to inspect.";
+            }
+            throw err;
+          }
+
+          const combined = new Map<string, BdIssue>();
+          for (const i of [...openIssues, ...inProgressIssues]) {
+            if (i?.id) combined.set(i.id, i);
+          }
+
+          const all = [...combined.values()].sort(compareBdIssuesDeterministic);
+
+          const ignoredEpics: BdIssue[] = [];
+          const scannedNonEpic: BdIssue[] = [];
+          for (const issue of all) {
+            if (issue.issue_type === "epic") ignoredEpics.push(issue);
+            else scannedNonEpic.push(issue);
+          }
+
+          const orphans: BdIssue[] = [];
+          const suspect: BdIssue[] = [];
+          for (const issue of scannedNonEpic) {
+            const a = (issue.assignee ?? "").trim();
+            if (!a) orphans.push(issue);
+            else if (a !== "worker" && a !== "overseer") suspect.push(issue);
+          }
+
+          const ignoredEpicsUnassigned = ignoredEpics.filter((i) => !(i.assignee ?? "").trim());
+          const ignoredEpicsSuspect = ignoredEpics.filter((i) => {
+            const a = (i.assignee ?? "").trim();
+            return a && a !== "worker" && a !== "overseer";
+          });
+
+          const limit = args.limit ?? 20;
+          const rows = [...orphans, ...suspect]
+            .slice()
+            .sort(compareBdIssuesDeterministic)
+            .slice(0, limit)
+            .map(formatOrphansRow);
+
+          const lines: string[] = [];
+          lines.push(
+            `Scanned (non-epic): ${scannedNonEpic.length} | Ignored epics: ${ignoredEpics.length} | Ignored epics (unassigned): ${ignoredEpicsUnassigned.length} | Orphans: ${orphans.length} | Suspect: ${suspect.length}`
+          );
+
+          if (rows.length) {
+            lines.push("id | title | status | assignee");
+            for (const r of rows) lines.push(r);
+          } else {
+            lines.push("No orphan/suspect non-epic beads found.");
+          }
+
+          const ignoredAttention = new Map<string, { issue: BdIssue; reason: string }>();
+          for (const i of ignoredEpicsUnassigned) ignoredAttention.set(i.id, { issue: i, reason: "unassigned" });
+          for (const i of ignoredEpicsSuspect)
+            ignoredAttention.set(i.id, { issue: i, reason: "suspect assignee" });
+
+          if (ignoredAttention.size) {
+            lines.push("Ignored epics:");
+            const epicRows = [...ignoredAttention.values()]
+              .map((v) => v)
+              .sort((a, b) => compareBdIssuesDeterministic(a.issue, b.issue))
+              .slice(0, 5)
+              .map(({ issue, reason }) => {
+                const base = formatOrphansRow(issue);
+                return `${base} | ${reason}`;
+              });
+            for (const r of epicRows) lines.push(r);
+          }
+
+          if (!args.fix) return lines.join("\n");
+
+          const changed: string[] = [];
+          const toFix = orphans.slice().sort(compareBdIssuesDeterministic);
+          for (const issue of toFix) {
+            const text = `${issue.title ?? ""}\n${issue.description ?? ""}\n${issue.notes ?? ""}`;
+            const target = inferAssigneeFromText(text);
+            await execBdJson<BdIssue[]>(
+              ["update", issue.id, "--assignee", target, "--json"],
+              { cwd: directory, actor }
+            );
+            changed.push(`${issue.id} -> ${target}`);
+          }
+
+          lines.push(`Fix mode: updated ${changed.length} orphan(s)`);
+          if (changed.length) {
+            for (const c of changed) lines.push(`- ${c}`);
+          }
+          return lines.join("\n");
         },
       }),
 
