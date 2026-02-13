@@ -464,6 +464,24 @@ export const VillagePlugin: Plugin = async ({ client }) => {
           if (!selected) return `no ready beads for ${assignee}`;
           if (!selected.id) throw new Error("bd ready returned an item without an id");
 
+          const selectedAssignee = (selected.assignee ?? "").trim();
+          if (selectedAssignee) {
+            // Most village beads are pre-assigned; `bd update --claim` fails for already-assigned issues.
+            if (selectedAssignee !== assignee) {
+              throw new Error(
+                `bd ready returned ${selected.id} assigned to ${selectedAssignee}; expected ${assignee}`
+              );
+            }
+
+            const out = await execBdJson<BdIssue[]>(
+              ["update", selected.id, "--assignee", assignee, "--status", "in_progress", "--json"],
+              { cwd: directory, actor: assignee }
+            );
+            const updated = Array.isArray(out) ? out[0] : undefined;
+            const claimed = updated ?? { ...selected, status: "in_progress", assignee };
+            return `claimed: ${formatIssueLine(claimed)}`;
+          }
+
           const updateArgsWithClaim = [
             "update",
             selected.id,
@@ -489,6 +507,33 @@ export const VillagePlugin: Plugin = async ({ client }) => {
 
             // Back-compat: older bd may not support --claim.
             if (text.includes("--claim") && (text.includes("unknown") || text.includes("flag"))) {
+              const fallback = await execBdJson<BdIssue[]>(
+                [
+                  "update",
+                  selected.id,
+                  "--assignee",
+                  assignee,
+                  "--status",
+                  "in_progress",
+                  "--json",
+                ],
+                { cwd: directory, actor: assignee }
+              );
+              updated = Array.isArray(fallback) ? fallback[0] : undefined;
+            } else if (text.includes("already claimed")) {
+              // Race-safe: if another session claimed it first, only proceed if it's claimed by our assignee.
+              const shown = await execBdJson<BdIssue[]>(["show", selected.id, "--json"], {
+                cwd: directory,
+                actor: assignee,
+              });
+              const current = Array.isArray(shown) ? shown[0] : undefined;
+              const currentAssignee = (current?.assignee ?? "").trim();
+              if (currentAssignee && currentAssignee !== assignee) {
+                throw new Error(
+                  `bd update --claim failed: ${selected.id} already claimed by ${currentAssignee}`
+                );
+              }
+
               const fallback = await execBdJson<BdIssue[]>(
                 [
                   "update",
