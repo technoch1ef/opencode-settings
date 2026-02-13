@@ -145,6 +145,14 @@ async function execBdJson<T>(
   }
 }
 
+function firstBdIssue(value: unknown): BdIssue | undefined {
+  if (Array.isArray(value)) return value.length ? firstBdIssue(value[0]) : undefined;
+  if (!value || typeof value !== "object") return undefined;
+  const v = value as any;
+  if (typeof v.id !== "string") return undefined;
+  return v as BdIssue;
+}
+
 function renderScaffoldDescription(args: {
   context?: string;
   branch: string;
@@ -620,7 +628,7 @@ export const VillagePlugin: Plugin = async ({ client }) => {
           let epicID: string | undefined;
 
           try {
-            const epicOut = await execBdJson<BdIssue[]>(
+            const epicOut = await execBdJson<BdIssue | BdIssue[]>(
               [
                 "create",
                 args.epic_title,
@@ -635,7 +643,7 @@ export const VillagePlugin: Plugin = async ({ client }) => {
               { cwd: directory, actor }
             );
 
-            const epic = Array.isArray(epicOut) ? epicOut[0] : undefined;
+            const epic = firstBdIssue(epicOut);
             epicID = epic?.id;
             if (!epicID) throw new Error("bd create epic returned no id");
             createdIDs.push(epicID);
@@ -648,7 +656,7 @@ export const VillagePlugin: Plugin = async ({ client }) => {
                 skills: ["beads-workflow", "stack-typescript"],
               });
 
-              const out = await execBdJson<BdIssue[]>(
+              const out = await execBdJson<BdIssue | BdIssue[]>(
                 [
                   "create",
                   c.title,
@@ -666,7 +674,7 @@ export const VillagePlugin: Plugin = async ({ client }) => {
                 ],
                 { cwd: directory, actor }
               );
-              const child = Array.isArray(out) ? out[0] : undefined;
+              const child = firstBdIssue(out);
               if (!child?.id) throw new Error(`bd create child returned no id for: ${c.title}`);
               createdIDs.push(child.id);
               childRows.push(
