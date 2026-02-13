@@ -22,7 +22,7 @@ const AGENT_TO_ACTOR: Record<string, string> = {
 
 const SHELL_SNIPPET_LANGS = new Set(["bash", "sh", "zsh", "shell"]);
 
-type BdIssue = {
+export type BdIssue = {
   id: string;
   title?: string;
   status?: string;
@@ -34,7 +34,7 @@ type BdIssue = {
   notes?: string;
 };
 
-function compareBdIssuesDeterministic(a: BdIssue, b: BdIssue): number {
+export function compareBdIssuesDeterministic(a: BdIssue, b: BdIssue): number {
   const ap = typeof a.priority === "number" ? a.priority : Number.POSITIVE_INFINITY;
   const bp = typeof b.priority === "number" ? b.priority : Number.POSITIVE_INFINITY;
   if (ap !== bp) return ap - bp;
@@ -48,6 +48,22 @@ function compareBdIssuesDeterministic(a: BdIssue, b: BdIssue): number {
   const aid = typeof a.id === "string" ? a.id : "";
   const bid = typeof b.id === "string" ? b.id : "";
   return aid.localeCompare(bid);
+}
+
+export type SingleInProgressGuardResult =
+  | { kind: "none" }
+  | { kind: "existing"; issue: BdIssue }
+  | { kind: "multiple"; issues: BdIssue[] };
+
+export function guardSingleInProgress(inProgress: BdIssue[]): SingleInProgressGuardResult {
+  if (inProgress.length === 0) return { kind: "none" };
+  if (inProgress.length === 1) return { kind: "existing", issue: inProgress[0] };
+  return { kind: "multiple", issues: inProgress.slice().sort(compareBdIssuesDeterministic) };
+}
+
+export function selectDeterministicReady(ready: BdIssue[]): BdIssue | null {
+  if (!ready.length) return null;
+  return ready.slice().sort(compareBdIssuesDeterministic)[0] ?? null;
 }
 
 function formatIssueLine(issue: BdIssue): string {
@@ -65,7 +81,7 @@ function formatOrphansRow(issue: BdIssue): string {
   return `${id} | ${title} | ${status} | ${assignee}`;
 }
 
-function inferAssigneeFromText(text: string): "worker" | "overseer" {
+export function inferAssigneeFromText(text: string): "worker" | "overseer" {
   const t = text.toLowerCase();
   const keywords = ["review", "verify", "verification", "check", "checks", "overseer", "approve"];
   return keywords.some((k) => t.includes(k)) ? "overseer" : "worker";
@@ -188,7 +204,7 @@ export function fixShellSnippetNewlines(text: unknown): unknown {
   });
 }
 
-const WORKER_WORK_LOOP_PROMPT = `Claim the next bead assigned to worker and start working on it.
+export const WORKER_WORK_LOOP_PROMPT = `Claim the next bead assigned to worker and start working on it.
 
 Use this workflow:
 1. Claim deterministically by calling \`village_claim\` (single in_progress guard):
@@ -206,7 +222,7 @@ Use this workflow:
    - wake: \`village_wake { target: "overseer", note: "<id> ready for review" }\`
 8. Repeat from step 1.`;
 
-const OVERSEER_WORK_LOOP_PROMPT = `Claim the next bead assigned to overseer and start reviewing it.
+export const OVERSEER_WORK_LOOP_PROMPT = `Claim the next bead assigned to overseer and start reviewing it.
 
 Use this workflow:
 1. Claim deterministically by calling \`village_claim\` (single in_progress guard):
@@ -426,16 +442,13 @@ export const VillagePlugin: Plugin = async ({ client }) => {
             { cwd: directory, actor: assignee }
           )) as BdIssue[];
 
-          if (inProgress.length === 1) {
-            const issue = inProgress[0];
-            return `existing in_progress: ${formatIssueLine(issue)}`;
+          const guard = guardSingleInProgress(inProgress);
+          if (guard.kind === "existing") {
+            return `existing in_progress: ${formatIssueLine(guard.issue)}`;
           }
 
-          if (inProgress.length > 1) {
-            const lines = inProgress
-              .slice()
-              .sort(compareBdIssuesDeterministic)
-              .map((i) => `- ${formatIssueLine(i)}`);
+          if (guard.kind === "multiple") {
+            const lines = guard.issues.map((i) => `- ${formatIssueLine(i)}`);
             throw new Error(
               `Multiple in_progress beads for ${assignee}; refusing to claim a new one.\n` +
                 lines.join("\n")
@@ -447,12 +460,9 @@ export const VillagePlugin: Plugin = async ({ client }) => {
             { cwd: directory, actor: assignee }
           )) as BdIssue[];
 
-          if (!ready.length) {
-            return `no ready beads for ${assignee}`;
-          }
-
-          const selected = ready.slice().sort(compareBdIssuesDeterministic)[0];
-          if (!selected?.id) throw new Error("bd ready returned an item without an id");
+          const selected = selectDeterministicReady(ready);
+          if (!selected) return `no ready beads for ${assignee}`;
+          if (!selected.id) throw new Error("bd ready returned an item without an id");
 
           const updateArgsWithClaim = [
             "update",
