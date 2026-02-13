@@ -7,7 +7,7 @@ import {
   OVERSEER_WORK_LOOP_PROMPT,
   selectDeterministicReady,
   WORKER_WORK_LOOP_PROMPT,
-} from "../plugins/village";
+} from "../lib/village-shared";
 
 describe("fixShellSnippetNewlines", () => {
   test("replaces literal \\n separator tokens in shell code fences", () => {
