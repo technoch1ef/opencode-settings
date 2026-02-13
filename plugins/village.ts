@@ -11,6 +11,8 @@
 
 import { tool, type Plugin } from "@opencode-ai/plugin";
 
+import { execFile } from "node:child_process";
+
 // Agent name to BD_ACTOR mapping
 const AGENT_TO_ACTOR: Record<string, string> = {
   mayor: "mayor",
@@ -19,6 +21,96 @@ const AGENT_TO_ACTOR: Record<string, string> = {
 };
 
 const SHELL_SNIPPET_LANGS = new Set(["bash", "sh", "zsh", "shell"]);
+
+type BdIssue = {
+  id: string;
+  title?: string;
+  status?: string;
+  priority?: number;
+  created_at?: string;
+  assignee?: string;
+};
+
+function compareBdIssuesDeterministic(a: BdIssue, b: BdIssue): number {
+  const ap = typeof a.priority === "number" ? a.priority : Number.POSITIVE_INFINITY;
+  const bp = typeof b.priority === "number" ? b.priority : Number.POSITIVE_INFINITY;
+  if (ap !== bp) return ap - bp;
+
+  const atRaw = typeof a.created_at === "string" ? Date.parse(a.created_at) : Number.POSITIVE_INFINITY;
+  const btRaw = typeof b.created_at === "string" ? Date.parse(b.created_at) : Number.POSITIVE_INFINITY;
+  const at = Number.isFinite(atRaw) ? atRaw : Number.POSITIVE_INFINITY;
+  const bt = Number.isFinite(btRaw) ? btRaw : Number.POSITIVE_INFINITY;
+  if (at !== bt) return at - bt;
+
+  const aid = typeof a.id === "string" ? a.id : "";
+  const bid = typeof b.id === "string" ? b.id : "";
+  return aid.localeCompare(bid);
+}
+
+function formatIssueLine(issue: BdIssue): string {
+  const id = issue.id;
+  const title = (issue.title ?? "").replace(/\s+/g, " ").trim();
+  const status = (issue.status ?? "").trim();
+  return `${id} | ${title || "(no title)"} | ${status || "(no status)"}`;
+}
+
+async function execFileText(
+  file: string,
+  args: string[],
+  options: {
+    cwd?: string;
+    env?: Record<string, string | undefined>;
+  }
+): Promise<{ stdout: string; stderr: string }> {
+  return await new Promise((resolve, reject) => {
+    execFile(
+      file,
+      args,
+      {
+        cwd: options.cwd,
+        env: options.env,
+        maxBuffer: 5 * 1024 * 1024,
+      },
+      (err, stdout, stderr) => {
+        if (err) {
+          const e = new Error(
+            `Command failed: ${[file, ...args].join(" ")}\n${String(stderr || stdout).slice(0, 2000)}`
+          );
+          (e as any).cause = err;
+          (e as any).stdout = stdout;
+          (e as any).stderr = stderr;
+          reject(e);
+          return;
+        }
+        resolve({ stdout: String(stdout), stderr: String(stderr) });
+      }
+    );
+  });
+}
+
+async function execBdJson<T>(
+  args: string[],
+  options: {
+    cwd?: string;
+    actor?: "worker" | "overseer";
+  }
+): Promise<T> {
+  const env = {
+    ...process.env,
+    ...(options.actor ? { BD_ACTOR: options.actor } : {}),
+  } as Record<string, string | undefined>;
+
+  const { stdout } = await execFileText("bd", args, { cwd: options.cwd, env });
+
+  try {
+    return JSON.parse(stdout) as T;
+  } catch (err) {
+    throw new Error(
+      `Failed to parse JSON from: bd ${args.join(" ")}\n` +
+        `Output: ${stdout.slice(0, 2000)}`
+    );
+  }
+}
 
 export function fixShellSnippetNewlines(text: unknown): unknown {
   if (typeof text !== "string") return text;
@@ -253,6 +345,109 @@ export const VillagePlugin: Plugin = async ({ client }) => {
     },
 
     tool: {
+      village_claim: tool({
+        description:
+          "Deterministically claim the next ready bead for worker/overseer, enforcing a single in_progress bead per assignee.",
+        args: {
+          assignee: tool.schema.enum(["worker", "overseer"] as const).optional(),
+          directory: tool.schema.string().optional(),
+        },
+        async execute(args, context) {
+          const directory = args.directory ?? context.directory;
+
+          const session = await getSession(context.sessionID);
+          const sessionAgent = (session as any)?.agent as string | undefined;
+
+          const assignee =
+            args.assignee ??
+            (sessionAgent === "worker" || sessionAgent === "overseer" ? sessionAgent : undefined);
+          if (assignee !== "worker" && assignee !== "overseer") {
+            throw new Error(
+              `village_claim requires assignee=worker|overseer (session agent: ${sessionAgent ?? "unknown"})`
+            );
+          }
+
+          const inProgress = (await execBdJson<BdIssue[]>(
+            ["list", "--status", "in_progress", "--assignee", assignee, "--json"],
+            { cwd: directory, actor: assignee }
+          )) as BdIssue[];
+
+          if (inProgress.length === 1) {
+            const issue = inProgress[0];
+            return `existing in_progress: ${formatIssueLine(issue)}`;
+          }
+
+          if (inProgress.length > 1) {
+            const lines = inProgress
+              .slice()
+              .sort(compareBdIssuesDeterministic)
+              .map((i) => `- ${formatIssueLine(i)}`);
+            throw new Error(
+              `Multiple in_progress beads for ${assignee}; refusing to claim a new one.\n` +
+                lines.join("\n")
+            );
+          }
+
+          const ready = (await execBdJson<BdIssue[]>(
+            ["ready", "--assignee", assignee, "--json"],
+            { cwd: directory, actor: assignee }
+          )) as BdIssue[];
+
+          if (!ready.length) {
+            return `no ready beads for ${assignee}`;
+          }
+
+          const selected = ready.slice().sort(compareBdIssuesDeterministic)[0];
+          if (!selected?.id) throw new Error("bd ready returned an item without an id");
+
+          const updateArgsWithClaim = [
+            "update",
+            selected.id,
+            "--claim",
+            "--assignee",
+            assignee,
+            "--status",
+            "in_progress",
+            "--json",
+          ];
+
+          let updated: BdIssue | undefined;
+          try {
+            const out = await execBdJson<BdIssue[]>(updateArgsWithClaim, {
+              cwd: directory,
+              actor: assignee,
+            });
+            updated = Array.isArray(out) ? out[0] : undefined;
+          } catch (err: any) {
+            const stderr = String((err as any)?.stderr ?? "");
+            const stdout = String((err as any)?.stdout ?? "");
+            const text = `${stderr}\n${stdout}`.toLowerCase();
+
+            // Back-compat: older bd may not support --claim.
+            if (text.includes("--claim") && (text.includes("unknown") || text.includes("flag"))) {
+              const fallback = await execBdJson<BdIssue[]>(
+                [
+                  "update",
+                  selected.id,
+                  "--assignee",
+                  assignee,
+                  "--status",
+                  "in_progress",
+                  "--json",
+                ],
+                { cwd: directory, actor: assignee }
+              );
+              updated = Array.isArray(fallback) ? fallback[0] : undefined;
+            } else {
+              throw err;
+            }
+          }
+
+          const claimed = updated ?? { ...selected, status: "in_progress", assignee };
+          return `claimed: ${formatIssueLine(claimed)}`;
+        },
+      }),
+
       village_spawn: tool({
         description:
           "Spawn village worker/overseer sessions under the current mayor session. Sessions stay idle unless kick=true.",
