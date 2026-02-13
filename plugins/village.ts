@@ -92,7 +92,7 @@ async function execBdJson<T>(
   args: string[],
   options: {
     cwd?: string;
-    actor?: "worker" | "overseer";
+    actor?: string;
   }
 ): Promise<T> {
   const env = {
@@ -110,6 +110,41 @@ async function execBdJson<T>(
         `Output: ${stdout.slice(0, 2000)}`
     );
   }
+}
+
+function renderScaffoldDescription(args: {
+  context?: string;
+  branch: string;
+  skills?: string[];
+  acceptance?: string;
+  notes?: string;
+}): string {
+  const skills = (args.skills ?? []).filter(Boolean);
+
+  const lines: string[] = [];
+  lines.push("## Context", "", (args.context ?? "").trim() || "(fill in)", "");
+  lines.push("## Skills", "");
+  if (skills.length) {
+    for (const s of skills) lines.push(`- ${s}`);
+  } else {
+    lines.push("- (fill in)");
+  }
+  lines.push("");
+
+  lines.push("## Branch", "", `\`${args.branch}\``, "");
+
+  lines.push("## Acceptance Criteria", "");
+  const acceptance = (args.acceptance ?? "").trim();
+  if (acceptance) {
+    lines.push(acceptance);
+  } else {
+    lines.push("- [ ] (fill in)");
+  }
+  lines.push("");
+
+  lines.push("## Notes", "", (args.notes ?? "").trim() || "(none)");
+
+  return lines.join("\n");
 }
 
 export function fixShellSnippetNewlines(text: unknown): unknown {
@@ -445,6 +480,142 @@ export const VillagePlugin: Plugin = async ({ client }) => {
 
           const claimed = updated ?? { ...selected, status: "in_progress", assignee };
           return `claimed: ${formatIssueLine(claimed)}`;
+        },
+      }),
+
+      village_scaffold: tool({
+        description:
+          "Deterministically create an epic and child beads with correct assignees and parent/child linkage.",
+        args: {
+          epic_title: tool.schema.string(),
+          epic_body: tool.schema.string().optional(),
+          branch: tool.schema.string(),
+          epic_priority: tool.schema.number().int().min(0).max(4).optional(),
+          children: tool
+            .schema
+            .array(
+              tool.schema.object({
+                title: tool.schema.string(),
+                type: tool.schema.enum(["task", "bug", "feature", "chore"] as const),
+                priority: tool.schema.number().int().min(0).max(4),
+                assignee: tool.schema.enum(["worker", "overseer"] as const),
+                body: tool.schema.string().optional(),
+              })
+            )
+            .optional(),
+          dry_run: tool.schema.boolean().optional(),
+          directory: tool.schema.string().optional(),
+        },
+        async execute(args, context) {
+          const directory = args.directory ?? context.directory;
+          const session = await getSession(context.sessionID);
+          const sessionAgent = (session as any)?.agent as string | undefined;
+          const actor = sessionAgent && AGENT_TO_ACTOR[sessionAgent] ? AGENT_TO_ACTOR[sessionAgent] : undefined;
+
+          const branch = args.branch.trim();
+          if (!branch) throw new Error("branch is required");
+
+          const epicDescription = renderScaffoldDescription({
+            context: args.epic_body,
+            branch,
+            skills: ["beads-workflow", "stack-typescript"],
+          });
+
+          const children = args.children ?? [];
+          for (const c of children) {
+            if (c.assignee !== "worker" && c.assignee !== "overseer") {
+              throw new Error(
+                `Invalid child assignee: ${String(c.assignee)} (must be worker|overseer)`
+              );
+            }
+          }
+
+          const planLines: string[] = [];
+          planLines.push(`Epic: ${args.epic_title} (priority ${args.epic_priority ?? 2})`);
+          for (const c of children) {
+            planLines.push(
+              `Child: ${c.title} | type=${c.type} | priority=${c.priority} | assignee=${c.assignee}`
+            );
+          }
+
+          if (args.dry_run) {
+            return ["dry_run: true", ...planLines].join("\n");
+          }
+
+          const createdIDs: string[] = [];
+          let epicID: string | undefined;
+
+          try {
+            const epicOut = await execBdJson<BdIssue[]>(
+              [
+                "create",
+                args.epic_title,
+                "--type",
+                "epic",
+                "--priority",
+                String(args.epic_priority ?? 2),
+                "--description",
+                epicDescription,
+                "--json",
+              ],
+              { cwd: directory, actor }
+            );
+
+            const epic = Array.isArray(epicOut) ? epicOut[0] : undefined;
+            epicID = epic?.id;
+            if (!epicID) throw new Error("bd create epic returned no id");
+            createdIDs.push(epicID);
+
+            const childRows: string[] = [];
+            for (const c of children) {
+              const childDescription = renderScaffoldDescription({
+                context: c.body,
+                branch,
+                skills: ["beads-workflow", "stack-typescript"],
+              });
+
+              const out = await execBdJson<BdIssue[]>(
+                [
+                  "create",
+                  c.title,
+                  "--type",
+                  c.type,
+                  "--priority",
+                  String(c.priority),
+                  "--assignee",
+                  c.assignee,
+                  "--description",
+                  childDescription,
+                  "--parent",
+                  epicID,
+                  "--json",
+                ],
+                { cwd: directory, actor }
+              );
+              const child = Array.isArray(out) ? out[0] : undefined;
+              if (!child?.id) throw new Error(`bd create child returned no id for: ${c.title}`);
+              createdIDs.push(child.id);
+              childRows.push(
+                `${child.id} | ${c.title.replace(/\s+/g, " ").trim()} | ${c.assignee} | ${c.type} | ${c.priority}`
+              );
+            }
+
+            const lines: string[] = [];
+            lines.push(`Created epic: ${epicID} | ${args.epic_title.replace(/\s+/g, " ").trim()}`);
+            if (childRows.length) {
+              lines.push("Created children:");
+              for (const r of childRows) lines.push(`- ${r}`);
+            } else {
+              lines.push("Created children: (none)");
+            }
+            return lines.join("\n");
+          } catch (err: any) {
+            const created = createdIDs.length ? createdIDs.join(", ") : "(none)";
+            throw new Error(
+              `village_scaffold failed; partial creation possible. Created IDs: ${created}\n` +
+                String(err?.message ?? err)
+            );
+          }
         },
       }),
 
