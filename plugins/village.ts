@@ -188,31 +188,34 @@ export function fixShellSnippetNewlines(text: unknown): unknown {
   });
 }
 
-const WORKER_WORK_LOOP_PROMPT = `Check for ready beads assigned to worker and start working on the first available one.
+const WORKER_WORK_LOOP_PROMPT = `Claim the next bead assigned to worker and start working on it.
 
 Use this workflow:
-1. Run \`bd ready --assignee worker\` to find work
-2. If a bead is found, move it to in_progress: \`bd update <id> --assignee worker --status in_progress\`
-3. Read the bead details and handoff packet
-4. Load the bead's listed skills
-5. Implement the required changes
-6. Commit locally (no push)
+1. Claim deterministically by calling \`village_claim\` (single in_progress guard):
+   - \`existing in_progress: <id> | ...\` => continue that bead
+   - \`claimed: <id> | ...\` => start that bead
+   - \`no ready beads for worker\` => report that and wait
+2. Read the bead details and handoff packet: \`bd show <id> --json\`
+3. Load skills listed under \`## Skills\`
+4. Ensure you are on the bead's branch (\`## Branch\`); if missing, mark blocked and report
+5. Implement only what the bead asks for (keep changes minimal)
+6. Commit locally (no push): \`git add -A && git commit -m "bead(<id>): <short description>"\`
 7. Hand off to overseer:
    - \`bd comments add <id> "Implementation complete. Ready for review."\`
    - \`bd update <id> --assignee overseer --status open\`
-8. Wake overseer using \`village_wake\`
-9. Check for more ready beads and repeat
+   - wake: \`village_wake { target: "overseer", note: "<id> ready for review" }\`
+8. Repeat from step 1.`;
 
-If no ready beads are found, report that and wait for new work.`;
-
-const OVERSEER_WORK_LOOP_PROMPT = `Check for ready beads assigned to overseer and start reviewing the first available one.
+const OVERSEER_WORK_LOOP_PROMPT = `Claim the next bead assigned to overseer and start reviewing it.
 
 Use this workflow:
-1. Run \`bd ready --assignee overseer\` to find work
-2. If a bead is found, move it to in_progress: \`bd update <id> --assignee overseer --status in_progress\`
-3. Read the bead details
-4. Load the bead's listed skills and run the appropriate checks (tests/linters/build)
-5. If approved:
+1. Claim deterministically by calling \`village_claim\` (single in_progress guard):
+   - \`existing in_progress: <id> | ...\` => continue that bead
+   - \`claimed: <id> | ...\` => start that bead
+   - \`no ready beads for overseer\` => report that and wait
+2. Read the bead details: \`bd show <id> --json\`
+3. Load skills listed under \`## Skills\` and run the appropriate checks (tests/linters/build)
+4. If approved:
    - \`bd comments add <id> "Approved. Checks: <...>"\`
    - \`bd close <id> --reason "Approved"\`
    - post-close parent epic check:
@@ -220,12 +223,11 @@ Use this workflow:
      - \`if [ -n "$PARENT_ID" ]; then bd children "$PARENT_ID" --json; fi\`
      - \`if [ -n "$PARENT_ID" ]; then OPEN_CHILD_COUNT=$(bd children "$PARENT_ID" --json | jq '[.[] | select(.status != "closed")] | length'); fi\`
      - \`if [ -n "$PARENT_ID" ] && [ "$OPEN_CHILD_COUNT" -eq 0 ]; then bd close "$PARENT_ID" --reason "All child beads closed"; fi\`
-6. If changes needed:
+5. If changes needed:
    - \`bd comments add <id> "Changes requested: <actionable bullets>"\`
    - \`bd update <id> --assignee worker --status open\`
-   - wake worker using \`village_wake\`
-
-If no ready beads are found, report that and wait for new work.`;
+   - wake: \`village_wake { target: "worker", note: "<id> needs changes" }\`
+6. Repeat from step 1.`;
 
 type SpawnRegistryEntry = {
   workers: string[];
