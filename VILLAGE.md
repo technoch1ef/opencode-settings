@@ -10,7 +10,7 @@ Key pieces
 - Agents: `agents/mayor.md`, `agents/worker.md`, `agents/overseer.md`
 - Plugin: `plugins/village.ts`
   - Injects `BD_ACTOR`
-  - Adds tools: `village_spawn`, `village_wake`
+  - Adds tools: `village_spawn`, `village_wake`, `village_claim`, `village_scaffold`, `village_orphans`, `village_status`
 - Public skills: `skills/*/SKILL.md`
 - Private skills (local-only): `skills-private/*/SKILL.md` (gitignored)
 
@@ -23,7 +23,7 @@ Private skills
 Running the workflow
 
 1. Start OpenCode in your project repo and use `mayor`.
-2. Mayor clarifies scope, drafts an epic + child beads, and creates them with `bd create`.
+2. Mayor clarifies scope, drafts an epic + child beads, and creates them (preferred: `village_scaffold`; fallback: `bd create`).
 3. Mayor delegates by calling `village_spawn`.
 4. Spawned sessions are idle by default. Navigate to child sessions: `ctrl+x right/left` (cycle children) and `ctrl+x up` (back to parent). Then run `/village:work` to start.
 5. Optional immediate start: use `village_spawn { kick: true }` or later `village_wake`.
@@ -35,6 +35,7 @@ Notes
 - Mayor never makes code/config/doc changes; it only creates beads and delegates work.
 - Spawning multiple workers in the same git working directory can cause conflicts.
 - `village_wake` is the explicit way to re-send the work-loop prompt to existing sessions.
+- Claiming work should be done via `village_claim` (enforces at most 1 in_progress bead per assignee).
 
 `/village:kick` shortcut
 

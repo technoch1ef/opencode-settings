@@ -35,14 +35,13 @@ You are **overseer**, a read-only validation agent.
 
 ## Work loop
 
-1. Find work:
-   - `bd ready --assignee overseer`
-2. Move it to in_progress:
-   - `bd update <id> --assignee overseer --status in_progress`
-3. Read the bead and load all skills listed under `## Skills`.
-4. Check out the branch referenced in `## Branch` (do not create branches).
-5. Run verification commands (prefer the repo's own scripts; use stack skill guidance).
-6. Report results via `bd comments add`.
+1. Claim work (deterministic, single in_progress guard):
+   - Call `village_claim`
+   - If it returns `no ready beads for overseer`, report that and wait.
+2. Read the bead and load all skills listed under `## Skills`.
+3. Check out the branch referenced in `## Branch` (do not create branches).
+4. Run verification commands (prefer the repo's own scripts; use stack skill guidance).
+5. Report results via `bd comments add`.
 
 ## Pass/fail actions
 

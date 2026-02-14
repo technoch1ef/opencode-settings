@@ -45,7 +45,7 @@
   "command": {
     "village:work": {
       "description": "Trigger the village work loop for your role",
-      "template": "Check for ready beads assigned to me and start working on the first available one.\n\nUse this workflow:\n1. Determine your assignee and list ready beads:\n   - Worker: `bd ready --assignee worker`\n   - Overseer: `bd ready --assignee overseer`\n2. If a bead is found, move it to in_progress: `bd update <id> --status in_progress`\n3. Read the bead details and handoff packet\n4. Load skills listed under `## Skills`\n5. Do the work for your role (worker: implement + local commit; overseer: run checks + approve/return)\n6. Update the bead status and comments\n7. Check for more ready beads and repeat\n\nIf no ready beads are found, report that and wait for new work."
+      "template": "Claim the next bead assigned to you and start working on it.\n\nUse this workflow:\n1. Claim deterministically by calling `village_claim` (single in_progress guard):\n   - `existing in_progress: <id> | ...` => continue that bead\n   - `claimed: <id> | ...` => start that bead\n   - `no ready beads for worker` / `no ready beads for overseer` => report and wait\n2. Read the bead details and handoff packet: `bd show <id> --json`\n3. Load skills listed under `## Skills`\n4. Do the work for your role (worker: implement + local commit; overseer: run checks + approve/return)\n5. Update bead status/comments and repeat from step 1\n\nImportant: do not claim work via `bd ready` + `bd update ... in_progress`; use `village_claim` so the single in_progress guard is enforced."
     },
     "village:kick": {
       "description": "Re-send village work-loop prompts to active sessions",

@@ -11,6 +11,19 @@
 
 import { tool, type Plugin } from "@opencode-ai/plugin";
 
+import { execFile } from "node:child_process";
+
+import {
+  compareBdIssuesDeterministic,
+  fixShellSnippetNewlines,
+  guardSingleInProgress,
+  inferAssigneeFromText,
+  OVERSEER_WORK_LOOP_PROMPT,
+  selectDeterministicReady,
+  WORKER_WORK_LOOP_PROMPT,
+  type BdIssue,
+} from "../lib/village-shared";
+
 // Agent name to BD_ACTOR mapping
 const AGENT_TO_ACTOR: Record<string, string> = {
   mayor: "mayor",
@@ -18,70 +31,122 @@ const AGENT_TO_ACTOR: Record<string, string> = {
   overseer: "overseer",
 };
 
-const SHELL_SNIPPET_LANGS = new Set(["bash", "sh", "zsh", "shell"]);
 
-export function fixShellSnippetNewlines(text: unknown): unknown {
-  if (typeof text !== "string") return text;
+function formatIssueLine(issue: BdIssue): string {
+  const id = issue.id;
+  const title = (issue.title ?? "").replace(/\s+/g, " ").trim();
+  const status = (issue.status ?? "").trim();
+  return `${id} | ${title || "(no title)"} | ${status || "(no status)"}`;
+}
 
-  // `; \nbd ...` is copy/paste-unsafe in shells (\n becomes `n`, e.g. `\nbd` => `nbd`).
-  // This normalizes *shell* code fences only, turning the literal `\n` token into
-  // a real newline when it is used as a command separator (e.g. `; \n`, `&& \n`).
-  if (!text.includes("\\n")) return text;
+function formatOrphansRow(issue: BdIssue): string {
+  const id = issue.id;
+  const title = (issue.title ?? "").replace(/\s+/g, " ").trim() || "(no title)";
+  const status = (issue.status ?? "").trim() || "(no status)";
+  const assignee = (issue.assignee ?? "").trim() || "(unassigned)";
+  return `${id} | ${title} | ${status} | ${assignee}`;
+}
 
-  const codeFenceRegex = /```([a-zA-Z0-9_-]+)?\r?\n([\s\S]*?)```/g;
-
-  return text.replace(codeFenceRegex, (full, lang, body) => {
-    const tag = (typeof lang === "string" ? lang : "").toLowerCase();
-    if (!SHELL_SNIPPET_LANGS.has(tag)) return full;
-
-    const fixedBody = String(body)
-      .replace(/([;]|&&|\|\|)[ \t]*\\n[ \t]*/g, "$1\n")
-      .replace(/^\\n[ \t]*/g, "\n");
-
-    const opening = lang ? `\`\`\`${lang}\n` : "```\n";
-    const bodyWithTrailingNewline = fixedBody.endsWith("\n") ? fixedBody : `${fixedBody}\n`;
-    return `${opening}${bodyWithTrailingNewline}` + "```";
+async function execFileText(
+  file: string,
+  args: string[],
+  options: {
+    cwd?: string;
+    env?: Record<string, string | undefined>;
+  }
+): Promise<{ stdout: string; stderr: string }> {
+  return await new Promise((resolve, reject) => {
+    execFile(
+      file,
+      args,
+      {
+        cwd: options.cwd,
+        env: options.env,
+        maxBuffer: 5 * 1024 * 1024,
+      },
+      (err, stdout, stderr) => {
+        if (err) {
+          const e = new Error(
+            `Command failed: ${[file, ...args].join(" ")}\n${String(stderr || stdout).slice(0, 2000)}`
+          );
+          (e as any).cause = err;
+          (e as any).stdout = stdout;
+          (e as any).stderr = stderr;
+          reject(e);
+          return;
+        }
+        resolve({ stdout: String(stdout), stderr: String(stderr) });
+      }
+    );
   });
 }
 
-const WORKER_WORK_LOOP_PROMPT = `Check for ready beads assigned to worker and start working on the first available one.
+async function execBdJson<T>(
+  args: string[],
+  options: {
+    cwd?: string;
+    actor?: string;
+  }
+): Promise<T> {
+  const env = {
+    ...process.env,
+    ...(options.actor ? { BD_ACTOR: options.actor } : {}),
+  } as Record<string, string | undefined>;
 
-Use this workflow:
-1. Run \`bd ready --assignee worker\` to find work
-2. If a bead is found, move it to in_progress: \`bd update <id> --assignee worker --status in_progress\`
-3. Read the bead details and handoff packet
-4. Load the bead's listed skills
-5. Implement the required changes
-6. Commit locally (no push)
-7. Hand off to overseer:
-   - \`bd comments add <id> "Implementation complete. Ready for review."\`
-   - \`bd update <id> --assignee overseer --status open\`
-8. Wake overseer using \`village_wake\`
-9. Check for more ready beads and repeat
+  const { stdout } = await execFileText("bd", args, { cwd: options.cwd, env });
 
-If no ready beads are found, report that and wait for new work.`;
+  try {
+    return JSON.parse(stdout) as T;
+  } catch (err) {
+    throw new Error(
+      `Failed to parse JSON from: bd ${args.join(" ")}\n` +
+        `Output: ${stdout.slice(0, 2000)}`
+    );
+  }
+}
 
-const OVERSEER_WORK_LOOP_PROMPT = `Check for ready beads assigned to overseer and start reviewing the first available one.
+function firstBdIssue(value: unknown): BdIssue | undefined {
+  if (Array.isArray(value)) return value.length ? firstBdIssue(value[0]) : undefined;
+  if (!value || typeof value !== "object") return undefined;
+  const v = value as any;
+  if (typeof v.id !== "string") return undefined;
+  return v as BdIssue;
+}
 
-Use this workflow:
-1. Run \`bd ready --assignee overseer\` to find work
-2. If a bead is found, move it to in_progress: \`bd update <id> --assignee overseer --status in_progress\`
-3. Read the bead details
-4. Load the bead's listed skills and run the appropriate checks (tests/linters/build)
-5. If approved:
-   - \`bd comments add <id> "Approved. Checks: <...>"\`
-   - \`bd close <id> --reason "Approved"\`
-   - post-close parent epic check:
-     - \`PARENT_ID=$(bd show <id> --json | jq -r '.[0].parent // empty')\`
-     - \`if [ -n "$PARENT_ID" ]; then bd children "$PARENT_ID" --json; fi\`
-     - \`if [ -n "$PARENT_ID" ]; then OPEN_CHILD_COUNT=$(bd children "$PARENT_ID" --json | jq '[.[] | select(.status != "closed")] | length'); fi\`
-     - \`if [ -n "$PARENT_ID" ] && [ "$OPEN_CHILD_COUNT" -eq 0 ]; then bd close "$PARENT_ID" --reason "All child beads closed"; fi\`
-6. If changes needed:
-   - \`bd comments add <id> "Changes requested: <actionable bullets>"\`
-   - \`bd update <id> --assignee worker --status open\`
-   - wake worker using \`village_wake\`
+function renderScaffoldDescription(args: {
+  context?: string;
+  branch: string;
+  skills?: string[];
+  acceptance?: string;
+  notes?: string;
+}): string {
+  const skills = (args.skills ?? []).filter(Boolean);
 
-If no ready beads are found, report that and wait for new work.`;
+  const lines: string[] = [];
+  lines.push("## Context", "", (args.context ?? "").trim() || "(fill in)", "");
+  lines.push("## Skills", "");
+  if (skills.length) {
+    for (const s of skills) lines.push(`- ${s}`);
+  } else {
+    lines.push("- (fill in)");
+  }
+  lines.push("");
+
+  lines.push("## Branch", "", `\`${args.branch}\``, "");
+
+  lines.push("## Acceptance Criteria", "");
+  const acceptance = (args.acceptance ?? "").trim();
+  if (acceptance) {
+    lines.push(acceptance);
+  } else {
+    lines.push("- [ ] (fill in)");
+  }
+  lines.push("");
+
+  lines.push("## Notes", "", (args.notes ?? "").trim() || "(none)");
+
+  return lines.join("\n");
+}
 
 type SpawnRegistryEntry = {
   workers: string[];
@@ -105,7 +170,7 @@ function isVillageSessionTitle(title: unknown): title is string {
   );
 }
 
-export const VillagePlugin: Plugin = async ({ client }) => {
+const VillagePlugin: Plugin = async ({ client }) => {
   // Track sessions where we've already auto-submitted
   const autoSubmittedSessions = new Set<string>();
   // Track spawned village sessions by mayor/root session
@@ -253,6 +318,407 @@ export const VillagePlugin: Plugin = async ({ client }) => {
     },
 
     tool: {
+      village_claim: tool({
+        description:
+          "Deterministically claim the next ready bead for worker/overseer, enforcing a single in_progress bead per assignee.",
+        args: {
+          assignee: tool.schema.enum(["worker", "overseer"] as const).optional(),
+          directory: tool.schema.string().optional(),
+        },
+        async execute(args, context) {
+          const directory = args.directory ?? context.directory;
+
+          const session = await getSession(context.sessionID);
+          const sessionAgent = (session as any)?.agent as string | undefined;
+
+          const assignee =
+            args.assignee ??
+            (sessionAgent === "worker" || sessionAgent === "overseer" ? sessionAgent : undefined);
+          if (assignee !== "worker" && assignee !== "overseer") {
+            throw new Error(
+              `village_claim requires assignee=worker|overseer (session agent: ${sessionAgent ?? "unknown"})`
+            );
+          }
+
+          const inProgress = (await execBdJson<BdIssue[]>(
+            ["list", "--status", "in_progress", "--assignee", assignee, "--json"],
+            { cwd: directory, actor: assignee }
+          )) as BdIssue[];
+
+          const guard = guardSingleInProgress(inProgress);
+          if (guard.kind === "existing") {
+            return `existing in_progress: ${formatIssueLine(guard.issue)}`;
+          }
+
+          if (guard.kind === "multiple") {
+            const lines = guard.issues.map((i) => `- ${formatIssueLine(i)}`);
+            throw new Error(
+              `Multiple in_progress beads for ${assignee}; refusing to claim a new one.\n` +
+                lines.join("\n")
+            );
+          }
+
+          const ready = (await execBdJson<BdIssue[]>(
+            ["ready", "--assignee", assignee, "--json"],
+            { cwd: directory, actor: assignee }
+          )) as BdIssue[];
+
+          const selected = selectDeterministicReady(ready);
+          if (!selected) return `no ready beads for ${assignee}`;
+          if (!selected.id) throw new Error("bd ready returned an item without an id");
+
+          const selectedAssignee = (selected.assignee ?? "").trim();
+          if (selectedAssignee) {
+            // Most village beads are pre-assigned; `bd update --claim` fails for already-assigned issues.
+            if (selectedAssignee !== assignee) {
+              throw new Error(
+                `bd ready returned ${selected.id} assigned to ${selectedAssignee}; expected ${assignee}`
+              );
+            }
+
+            const out = await execBdJson<BdIssue[]>(
+              ["update", selected.id, "--assignee", assignee, "--status", "in_progress", "--json"],
+              { cwd: directory, actor: assignee }
+            );
+            const updated = Array.isArray(out) ? out[0] : undefined;
+            const claimed = updated ?? { ...selected, status: "in_progress", assignee };
+            return `claimed: ${formatIssueLine(claimed)}`;
+          }
+
+          const updateArgsWithClaim = [
+            "update",
+            selected.id,
+            "--claim",
+            "--assignee",
+            assignee,
+            "--status",
+            "in_progress",
+            "--json",
+          ];
+
+          let updated: BdIssue | undefined;
+          try {
+            const out = await execBdJson<BdIssue[]>(updateArgsWithClaim, {
+              cwd: directory,
+              actor: assignee,
+            });
+            updated = Array.isArray(out) ? out[0] : undefined;
+          } catch (err: any) {
+            const stderr = String((err as any)?.stderr ?? "");
+            const stdout = String((err as any)?.stdout ?? "");
+            const text = `${stderr}\n${stdout}`.toLowerCase();
+
+            // Back-compat: older bd may not support --claim.
+            if (text.includes("--claim") && (text.includes("unknown") || text.includes("flag"))) {
+              const fallback = await execBdJson<BdIssue[]>(
+                [
+                  "update",
+                  selected.id,
+                  "--assignee",
+                  assignee,
+                  "--status",
+                  "in_progress",
+                  "--json",
+                ],
+                { cwd: directory, actor: assignee }
+              );
+              updated = Array.isArray(fallback) ? fallback[0] : undefined;
+            } else if (text.includes("already claimed")) {
+              // Race-safe: if another session claimed it first, only proceed if it's claimed by our assignee.
+              const shown = await execBdJson<BdIssue[]>(["show", selected.id, "--json"], {
+                cwd: directory,
+                actor: assignee,
+              });
+              const current = Array.isArray(shown) ? shown[0] : undefined;
+              const currentAssignee = (current?.assignee ?? "").trim();
+              if (currentAssignee && currentAssignee !== assignee) {
+                throw new Error(
+                  `bd update --claim failed: ${selected.id} already claimed by ${currentAssignee}`
+                );
+              }
+
+              const fallback = await execBdJson<BdIssue[]>(
+                [
+                  "update",
+                  selected.id,
+                  "--assignee",
+                  assignee,
+                  "--status",
+                  "in_progress",
+                  "--json",
+                ],
+                { cwd: directory, actor: assignee }
+              );
+              updated = Array.isArray(fallback) ? fallback[0] : undefined;
+            } else {
+              throw err;
+            }
+          }
+
+          const claimed = updated ?? { ...selected, status: "in_progress", assignee };
+          return `claimed: ${formatIssueLine(claimed)}`;
+        },
+      }),
+
+      village_scaffold: tool({
+        description:
+          "Deterministically create an epic and child beads with correct assignees and parent/child linkage.",
+        args: {
+          epic_title: tool.schema.string(),
+          epic_body: tool.schema.string().optional(),
+          branch: tool.schema.string(),
+          epic_priority: tool.schema.number().int().min(0).max(4).optional(),
+          children: tool
+            .schema
+            .array(
+              tool.schema.object({
+                title: tool.schema.string(),
+                type: tool.schema.enum(["task", "bug", "feature", "chore"] as const),
+                priority: tool.schema.number().int().min(0).max(4),
+                assignee: tool.schema.enum(["worker", "overseer"] as const),
+                body: tool.schema.string().optional(),
+              })
+            )
+            .optional(),
+          dry_run: tool.schema.boolean().optional(),
+          directory: tool.schema.string().optional(),
+        },
+        async execute(args, context) {
+          const directory = args.directory ?? context.directory;
+          const session = await getSession(context.sessionID);
+          const sessionAgent = (session as any)?.agent as string | undefined;
+          const actor = sessionAgent && AGENT_TO_ACTOR[sessionAgent] ? AGENT_TO_ACTOR[sessionAgent] : undefined;
+
+          const branch = args.branch.trim();
+          if (!branch) throw new Error("branch is required");
+
+          const epicDescription = renderScaffoldDescription({
+            context: args.epic_body,
+            branch,
+            skills: ["beads-workflow", "stack-typescript"],
+          });
+
+          const children = args.children ?? [];
+          for (const c of children) {
+            if (c.assignee !== "worker" && c.assignee !== "overseer") {
+              throw new Error(
+                `Invalid child assignee: ${String(c.assignee)} (must be worker|overseer)`
+              );
+            }
+          }
+
+          const planLines: string[] = [];
+          planLines.push(`Epic: ${args.epic_title} (priority ${args.epic_priority ?? 2})`);
+          for (const c of children) {
+            planLines.push(
+              `Child: ${c.title} | type=${c.type} | priority=${c.priority} | assignee=${c.assignee}`
+            );
+          }
+
+          if (args.dry_run) {
+            return ["dry_run: true", ...planLines].join("\n");
+          }
+
+          const createdIDs: string[] = [];
+          let epicID: string | undefined;
+
+          try {
+            const epicOut = await execBdJson<BdIssue | BdIssue[]>(
+              [
+                "create",
+                args.epic_title,
+                "--type",
+                "epic",
+                "--priority",
+                String(args.epic_priority ?? 2),
+                "--description",
+                epicDescription,
+                "--json",
+              ],
+              { cwd: directory, actor }
+            );
+
+            const epic = firstBdIssue(epicOut);
+            epicID = epic?.id;
+            if (!epicID) throw new Error("bd create epic returned no id");
+            createdIDs.push(epicID);
+
+            const childRows: string[] = [];
+            for (const c of children) {
+              const childDescription = renderScaffoldDescription({
+                context: c.body,
+                branch,
+                skills: ["beads-workflow", "stack-typescript"],
+              });
+
+              const out = await execBdJson<BdIssue | BdIssue[]>(
+                [
+                  "create",
+                  c.title,
+                  "--type",
+                  c.type,
+                  "--priority",
+                  String(c.priority),
+                  "--assignee",
+                  c.assignee,
+                  "--description",
+                  childDescription,
+                  "--parent",
+                  epicID,
+                  "--json",
+                ],
+                { cwd: directory, actor }
+              );
+              const child = firstBdIssue(out);
+              if (!child?.id) throw new Error(`bd create child returned no id for: ${c.title}`);
+              createdIDs.push(child.id);
+              childRows.push(
+                `${child.id} | ${c.title.replace(/\s+/g, " ").trim()} | ${c.assignee} | ${c.type} | ${c.priority}`
+              );
+            }
+
+            const lines: string[] = [];
+            lines.push(`Created epic: ${epicID} | ${args.epic_title.replace(/\s+/g, " ").trim()}`);
+            if (childRows.length) {
+              lines.push("Created children:");
+              for (const r of childRows) lines.push(`- ${r}`);
+            } else {
+              lines.push("Created children: (none)");
+            }
+            return lines.join("\n");
+          } catch (err: any) {
+            const created = createdIDs.length ? createdIDs.join(", ") : "(none)";
+            throw new Error(
+              `village_scaffold failed; partial creation possible. Created IDs: ${created}\n` +
+                String(err?.message ?? err)
+            );
+          }
+        },
+      }),
+
+      village_orphans: tool({
+        description:
+          "Report orphan/suspect-assignee beads (open + in_progress) and optionally fix unassigned non-epics.",
+        args: {
+          fix: tool.schema.boolean().optional(),
+          limit: tool.schema.number().int().min(1).max(200).optional(),
+          directory: tool.schema.string().optional(),
+        },
+        async execute(args, context) {
+          const directory = args.directory ?? context.directory;
+          const session = await getSession(context.sessionID);
+          const sessionAgent = (session as any)?.agent as string | undefined;
+          const actor = sessionAgent && AGENT_TO_ACTOR[sessionAgent] ? AGENT_TO_ACTOR[sessionAgent] : undefined;
+
+          let openIssues: BdIssue[] = [];
+          let inProgressIssues: BdIssue[] = [];
+          try {
+            openIssues = await execBdJson<BdIssue[]>(["list", "--status", "open", "--json"], {
+              cwd: directory,
+              actor,
+            });
+            inProgressIssues = await execBdJson<BdIssue[]>(
+              ["list", "--status", "in_progress", "--json"],
+              { cwd: directory, actor }
+            );
+          } catch (err: any) {
+            const msg = String(err?.message ?? err);
+            if (msg.toLowerCase().includes("enoent") && msg.toLowerCase().includes("bd")) {
+              return "bd not available; cannot inspect beads.";
+            }
+            if (msg.includes(".beads") && msg.toLowerCase().includes("missing")) {
+              return "No .beads database found; nothing to inspect.";
+            }
+            throw err;
+          }
+
+          const combined = new Map<string, BdIssue>();
+          for (const i of [...openIssues, ...inProgressIssues]) {
+            if (i?.id) combined.set(i.id, i);
+          }
+
+          const all = [...combined.values()].sort(compareBdIssuesDeterministic);
+
+          const ignoredEpics: BdIssue[] = [];
+          const scannedNonEpic: BdIssue[] = [];
+          for (const issue of all) {
+            if (issue.issue_type === "epic") ignoredEpics.push(issue);
+            else scannedNonEpic.push(issue);
+          }
+
+          const orphans: BdIssue[] = [];
+          const suspect: BdIssue[] = [];
+          for (const issue of scannedNonEpic) {
+            const a = (issue.assignee ?? "").trim();
+            if (!a) orphans.push(issue);
+            else if (a !== "worker" && a !== "overseer") suspect.push(issue);
+          }
+
+          const ignoredEpicsUnassigned = ignoredEpics.filter((i) => !(i.assignee ?? "").trim());
+          const ignoredEpicsSuspect = ignoredEpics.filter((i) => {
+            const a = (i.assignee ?? "").trim();
+            return a && a !== "worker" && a !== "overseer";
+          });
+
+          const limit = args.limit ?? 20;
+          const rows = [...orphans, ...suspect]
+            .slice()
+            .sort(compareBdIssuesDeterministic)
+            .slice(0, limit)
+            .map(formatOrphansRow);
+
+          const lines: string[] = [];
+          lines.push(
+            `Scanned (non-epic): ${scannedNonEpic.length} | Ignored epics: ${ignoredEpics.length} | Ignored epics (unassigned): ${ignoredEpicsUnassigned.length} | Orphans: ${orphans.length} | Suspect: ${suspect.length}`
+          );
+
+          if (rows.length) {
+            lines.push("id | title | status | assignee");
+            for (const r of rows) lines.push(r);
+          } else {
+            lines.push("No orphan/suspect non-epic beads found.");
+          }
+
+          const ignoredAttention = new Map<string, { issue: BdIssue; reason: string }>();
+          for (const i of ignoredEpicsUnassigned) ignoredAttention.set(i.id, { issue: i, reason: "unassigned" });
+          for (const i of ignoredEpicsSuspect)
+            ignoredAttention.set(i.id, { issue: i, reason: "suspect assignee" });
+
+          if (ignoredAttention.size) {
+            lines.push("Ignored epics:");
+            const epicRows = [...ignoredAttention.values()]
+              .map((v) => v)
+              .sort((a, b) => compareBdIssuesDeterministic(a.issue, b.issue))
+              .slice(0, 5)
+              .map(({ issue, reason }) => {
+                const base = formatOrphansRow(issue);
+                return `${base} | ${reason}`;
+              });
+            for (const r of epicRows) lines.push(r);
+          }
+
+          if (!args.fix) return lines.join("\n");
+
+          const changed: string[] = [];
+          const toFix = orphans.slice().sort(compareBdIssuesDeterministic);
+          for (const issue of toFix) {
+            const text = `${issue.title ?? ""}\n${issue.description ?? ""}\n${issue.notes ?? ""}`;
+            const target = inferAssigneeFromText(text);
+            await execBdJson<BdIssue[]>(
+              ["update", issue.id, "--assignee", target, "--json"],
+              { cwd: directory, actor }
+            );
+            changed.push(`${issue.id} -> ${target}`);
+          }
+
+          lines.push(`Fix mode: updated ${changed.length} orphan(s)`);
+          if (changed.length) {
+            for (const c of changed) lines.push(`- ${c}`);
+          }
+          return lines.join("\n");
+        },
+      }),
+
       village_spawn: tool({
         description:
           "Spawn village worker/overseer sessions under the current mayor session. Sessions stay idle unless kick=true.",
@@ -569,3 +1035,5 @@ export const VillagePlugin: Plugin = async ({ client }) => {
     },
   };
 };
+
+export default VillagePlugin;
