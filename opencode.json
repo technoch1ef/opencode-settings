@@ -1,13 +1,9 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "default_agent": "mayor",
-  "plugin": [
-    "opencode-beads"
-  ],
+  "plugin": ["opencode-beads"],
   "skills": {
-    "paths": [
-      "{env:HOME}/.config/opencode/skills-private"
-    ]
+    "paths": ["{env:HOME}/.config/opencode/skills-private"]
   },
   "permission": {
     "bash": {
@@ -39,9 +35,7 @@
       }
     }
   },
-  "instructions": [
-    ".opencode/github-rules.md"
-  ],
+  "instructions": [".opencode/github-rules.md"],
   "command": {
     "village:work": {
       "description": "Trigger the village work loop for your role",
