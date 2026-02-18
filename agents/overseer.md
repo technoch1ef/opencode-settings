@@ -57,7 +57,6 @@ If approved:
 If changes are required:
 - `bd comments add <id> "Changes requested: <actionable bullets>"`
 - `bd update <id> --assignee worker --status open`
-- Wake the worker: `village_wake { target: "worker", note: "<id> needs changes" }`
 
 ## Constraints
 - Never edit files.

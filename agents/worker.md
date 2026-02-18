@@ -64,7 +64,6 @@ You are **worker**. You only implement the work outlined in beads assigned to yo
 7. Hand off to overseer:
    - `bd comments add <id> "Implementation complete. Ready for review."`
    - `bd update <id> --assignee overseer --status open`
-   - Wake overseer: `village_wake { target: "overseer", note: "<id> ready for review" }`
 8. Repeat.
 
 ## Claim guardrail
