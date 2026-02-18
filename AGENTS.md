@@ -9,7 +9,7 @@ If you were dropped into a new/compacted session, run `bd prime` to recover Bead
 ## What Lives Where
 
 - Agents (role prompts + constraints): `agents/mayor.md`, `agents/worker.md`, `agents/overseer.md`
-- Village plugin (spawn/wake tools + work-loop prompts): `plugins/village.ts`
+- Village plugin (claim/scaffold tools + event handlers): `plugins/village.ts`
 - OpenCode config entrypoint: `opencode.json`
 - Slash commands (e.g. `/village:work`): `commands/`
 - Public skills: `skills/*/SKILL.md`
@@ -18,7 +18,7 @@ If you were dropped into a new/compacted session, run `bd prime` to recover Bead
 
 ## Village Model
 
-- `mayor`: clarifies scope, researches, creates beads (epic + child tasks), delegates via `village_spawn` / `village_wake`
+- `mayor`: clarifies scope, researches, creates beads (epic + child tasks)
 - `worker`: implements exactly what a bead asks for, makes local commits, hands off to overseer (no tests, no pushes)
 - `overseer`: reviews, runs checks (tests/linters/build), closes beads or returns them with actionable feedback (no edits, no pushes)
 
