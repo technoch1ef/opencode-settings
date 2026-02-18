@@ -89,7 +89,6 @@ Use this workflow:
 7. Hand off to overseer:
    - \`bd comments add <id> "Implementation complete. Ready for review."\`
    - \`bd update <id> --assignee overseer --status open\`
-   - wake: \`village_wake { target: "overseer", note: "<id> ready for review" }\`
 8. Repeat from step 1.`;
 
 export const OVERSEER_WORK_LOOP_PROMPT = `Claim the next bead assigned to overseer and start reviewing it.
@@ -112,5 +111,4 @@ Use this workflow:
 5. If changes needed:
    - \`bd comments add <id> "Changes requested: <actionable bullets>"\`
    - \`bd update <id> --assignee worker --status open\`
-   - wake: \`village_wake { target: "worker", note: "<id> needs changes" }\`
 6. Repeat from step 1.`;
