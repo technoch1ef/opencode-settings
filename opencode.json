@@ -56,6 +56,15 @@
       "url": "https://mcp.figma.com/mcp",
       "enabled": true,
       "timeout": 30000
+    },
+    "bugsnag": {
+      "type": "local",
+      "command": ["npx", "-y", "@smartbear/mcp@latest"],
+      "enabled": true,
+      "timeout": 30000,
+      "environment": {
+        "BUGSNAG_AUTH_TOKEN": "$BUGSNAG_MCP_AUTH_TOKEN"
+      }
     }
   }
 }
