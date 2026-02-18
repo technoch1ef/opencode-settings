@@ -5,8 +5,8 @@
  *
  * Features:
  * - Injects BD_ACTOR environment variable based on current agent
- * - Auto-submits work loop prompt when VILLAGE_AUTORUN=1 is set
- * - Provides tools to spawn and wake worker/overseer sessions
+ * - Provides tools: village_claim, village_scaffold, village_orphans, village_status
+ * - Monitors village session errors and status transitions
  */
 
 import { tool, type Plugin } from "@opencode-ai/plugin";
@@ -18,9 +18,7 @@ import {
   fixShellSnippetNewlines,
   guardSingleInProgress,
   inferAssigneeFromText,
-  OVERSEER_WORK_LOOP_PROMPT,
   selectDeterministicReady,
-  WORKER_WORK_LOOP_PROMPT,
   type BdIssue,
 } from "../lib/village-shared";
 
@@ -148,20 +146,10 @@ function renderScaffoldDescription(args: {
   return lines.join("\n");
 }
 
-type SpawnRegistryEntry = {
-  workers: string[];
-  overseers: string[];
-};
-
 type SessionSummary = {
   id: string;
   title: string;
 };
-
-function withOptionalNote(prompt: string, note?: string) {
-  if (!note) return prompt;
-  return `${prompt}\n\nNote: ${note}`;
-}
 
 function isVillageSessionTitle(title: unknown): title is string {
   return (
@@ -171,10 +159,6 @@ function isVillageSessionTitle(title: unknown): title is string {
 }
 
 const VillagePlugin: Plugin = async ({ client }) => {
-  // Track sessions where we've already auto-submitted
-  const autoSubmittedSessions = new Set<string>();
-  // Track spawned village sessions by mayor/root session
-  const registry = new Map<string, SpawnRegistryEntry>();
   // Track dedupe keys for village session notifications
   const seenErrorKeys = new Set<string>();
   const lastVillageStatus = new Map<string, string>();
@@ -235,31 +219,6 @@ const VillagePlugin: Plugin = async ({ client }) => {
     return cur;
   }
 
-  async function loadRegistryFromChildren(rootID: string): Promise<SpawnRegistryEntry> {
-    const childrenRes = await client.session.children({ path: { id: rootID } });
-    const children = (childrenRes.data || []) as any[];
-
-    const workers = children
-      .filter((s) => typeof s?.title === "string" && s.title.startsWith("village-worker-"))
-      .map((s) => s.id)
-      .filter(Boolean);
-
-    const overseers = children
-      .filter((s) => typeof s?.title === "string" && s.title.startsWith("village-overseer"))
-      .map((s) => s.id)
-      .filter(Boolean);
-
-    const entry = { workers, overseers };
-    registry.set(rootID, entry);
-    return entry;
-  }
-
-  async function resolveRegistry(rootID: string): Promise<SpawnRegistryEntry> {
-    const existing = registry.get(rootID);
-    if (existing) return existing;
-    return loadRegistryFromChildren(rootID);
-  }
-
   async function listVillageSessions(rootID: string): Promise<{
     workers: SessionSummary[];
     overseers: SessionSummary[];
@@ -283,23 +242,6 @@ const VillagePlugin: Plugin = async ({ client }) => {
   function formatSessionList(label: string, sessions: SessionSummary[]): string {
     if (!sessions.length) return `${label}: (none)`;
     return `${label}: ${sessions.map((s) => `${s.title} (${s.id})`).join(", ")}`;
-  }
-
-  async function kickSession(args: {
-    sessionID: string;
-    directory: string;
-    agent: "worker" | "overseer";
-    prompt: string;
-    note?: string;
-  }) {
-    await client.session.promptAsync({
-      path: { id: args.sessionID },
-      query: { directory: args.directory },
-      body: {
-        agent: args.agent,
-        parts: [{ type: "text", text: withOptionalNote(args.prompt, args.note) }],
-      },
-    });
   }
 
   return {
@@ -719,189 +661,6 @@ const VillagePlugin: Plugin = async ({ client }) => {
         },
       }),
 
-      village_spawn: tool({
-        description:
-          "Spawn village worker/overseer sessions under the current mayor session. Sessions stay idle unless kick=true.",
-        args: {
-          workers: tool.schema.number().int().min(1).max(8).optional(),
-          overseer: tool.schema.boolean().optional(),
-          kick: tool.schema.boolean().optional(),
-          directory: tool.schema.string().optional(),
-          note: tool.schema.string().optional(),
-        },
-        async execute(args, context) {
-          const directory = args.directory ?? context.directory;
-          const rootID = await getRootSessionID(context.sessionID);
-          const desiredWorkers = args.workers ?? 1;
-          const desiredOverseer = args.overseer ?? true;
-          const shouldKick = args.kick ?? false;
-
-          if (desiredWorkers > 1) {
-            await client.tui.showToast({
-              query: { directory },
-              body: {
-                title: "Village",
-                message:
-                  "Spawning multiple workers in the same directory can cause git conflicts.",
-                variant: "warning",
-                duration: 5000,
-              },
-            });
-          }
-
-          const entry = await resolveRegistry(rootID);
-          const createdWorkers: string[] = [];
-          while (entry.workers.length < desiredWorkers) {
-            const idx = entry.workers.length + 1;
-            const created = await client.session.create({
-              query: { directory },
-              body: {
-                parentID: rootID,
-                title: `village-worker-${idx}`,
-              },
-            });
-            entry.workers.push(created.data.id);
-            createdWorkers.push(created.data.id);
-          }
-
-          const createdOverseers: string[] = [];
-          if (desiredOverseer && entry.overseers.length < 1) {
-            const created = await client.session.create({
-              query: { directory },
-              body: {
-                parentID: rootID,
-                title: "village-overseer",
-              },
-            });
-            entry.overseers.push(created.data.id);
-            createdOverseers.push(created.data.id);
-          }
-
-          if (shouldKick) {
-            await Promise.all([
-              ...entry.workers.map((id) =>
-                kickSession({
-                  sessionID: id,
-                  directory,
-                  agent: "worker",
-                  prompt: WORKER_WORK_LOOP_PROMPT,
-                  note: args.note,
-                })
-              ),
-              ...entry.overseers.map((id) =>
-                kickSession({
-                  sessionID: id,
-                  directory,
-                  agent: "overseer",
-                  prompt: OVERSEER_WORK_LOOP_PROMPT,
-                  note: args.note,
-                })
-              ),
-            ]);
-          }
-
-          registry.set(rootID, entry);
-
-          await client.tui.showToast({
-            query: { directory },
-            body: {
-              title: "Village",
-              message: `Spawned ${entry.workers.length} worker(s)${
-                desiredOverseer ? " + overseer" : ""
-              }${
-                shouldKick
-                  ? " and kicked them. Navigate: ctrl+x right/left (cycle children), ctrl+x up (back to parent)."
-                  : ". Sessions are idle; navigate to them (ctrl+x right/left) and run /village:work to start."
-              }`,
-              variant: "success",
-              duration: 4000,
-            },
-          });
-
-          const sessions = await listVillageSessions(rootID);
-
-          const lines = [
-            `Root session: ${rootID}`,
-            formatSessionList("Workers", sessions.workers),
-            formatSessionList("Overseers", sessions.overseers),
-            shouldKick
-              ? "Kicked: yes (work loop prompt sent)"
-              : "Kicked: no (sessions are idle; run /village:work manually or use village_wake)",
-          ];
-
-          if (createdWorkers.length || createdOverseers.length) {
-            lines.push(
-              `Created: ${[
-                ...createdWorkers.map((id) => `worker:${id}`),
-                ...createdOverseers.map((id) => `overseer:${id}`),
-              ].join(", ")}`
-            );
-          }
-
-          return lines.join("\n");
-        },
-      }),
-
-      village_wake: tool({
-        description:
-          "Wake existing village worker/overseer sessions by re-sending their work loop prompt.",
-        args: {
-          target: tool.schema.enum(["worker", "overseer", "all"] as const).optional(),
-          note: tool.schema.string().optional(),
-          directory: tool.schema.string().optional(),
-        },
-        async execute(args, context) {
-          const directory = args.directory ?? context.directory;
-          const rootID = await getRootSessionID(context.sessionID);
-          const entry = await resolveRegistry(rootID);
-
-          const target = args.target ?? "all";
-          const workerIDs = target === "overseer" ? [] : entry.workers;
-          const overseerIDs = target === "worker" ? [] : entry.overseers;
-
-          await Promise.all([
-            ...workerIDs.map((id) =>
-              kickSession({
-                sessionID: id,
-                directory,
-                agent: "worker",
-                prompt: WORKER_WORK_LOOP_PROMPT,
-                note: args.note,
-              })
-            ),
-            ...overseerIDs.map((id) =>
-              kickSession({
-                sessionID: id,
-                directory,
-                agent: "overseer",
-                prompt: OVERSEER_WORK_LOOP_PROMPT,
-                note: args.note,
-              })
-            ),
-          ]);
-
-          await client.tui.showToast({
-            query: { directory },
-            body: {
-              title: "Village",
-              message: `Woke ${workerIDs.length} worker(s) and ${overseerIDs.length} overseer(s). Navigate: ctrl+x right/left (cycle children), ctrl+x up (back to parent).`,
-              variant: "info",
-              duration: 2500,
-            },
-          });
-
-          const sessions = await listVillageSessions(rootID);
-
-          return [
-            `Root session: ${rootID}`,
-            `Woke workers: ${workerIDs.join(", ") || "(none)"}`,
-            `Woke overseers: ${overseerIDs.join(", ") || "(none)"}`,
-            formatSessionList("Workers", sessions.workers),
-            formatSessionList("Overseers", sessions.overseers),
-          ].join("\n");
-        },
-      }),
-
       village_status: tool({
         description:
           "List village sessions under the current root session (IDs and titles).",
@@ -919,7 +678,7 @@ const VillagePlugin: Plugin = async ({ client }) => {
       }),
     },
 
-    // Auto-submit work loop when VILLAGE_AUTORUN=1
+    // Monitor village session errors and status transitions
     event: async ({ event }) => {
       const properties = (event.properties ?? {}) as any;
 
@@ -993,44 +752,6 @@ const VillagePlugin: Plugin = async ({ client }) => {
           });
         }
         return;
-      }
-
-      // Only trigger on server connected (startup)
-      if (event.type !== "server.connected") return;
-
-      // Check if autorun is enabled
-      if (process.env.VILLAGE_AUTORUN !== "1") return;
-
-      // Get current session info
-      const sessionID = properties?.sessionID;
-      if (!sessionID) return;
-
-      // Don't auto-submit twice for same session
-      if (autoSubmittedSessions.has(sessionID)) return;
-      autoSubmittedSessions.add(sessionID);
-
-      // Get session to check agent
-      try {
-        const session = await client.session.get({ path: { id: sessionID } });
-        const agent = (session.data as any)?.agent as string | undefined;
-
-        // Only auto-run for worker/overseer agents, not mayor
-        if (!agent || agent === "mayor") return;
-        if (!AGENT_TO_ACTOR[agent]) return;
-
-        const prompt = agent === "overseer" ? OVERSEER_WORK_LOOP_PROMPT : WORKER_WORK_LOOP_PROMPT;
-
-        // Auto-submit the work loop prompt
-        await client.session.prompt({
-          path: { id: sessionID },
-          body: {
-            agent,
-            parts: [{ type: "text", text: prompt }],
-          },
-        });
-      } catch (err) {
-        // Silent fail - autorun is a convenience, not critical
-        console.error("[village] Auto-run failed:", err);
       }
     },
   };
