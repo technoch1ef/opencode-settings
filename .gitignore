@@ -1,0 +1,10 @@
+node_modules
+package.json
+bun.lock
+
+# Local MCP config (per-machine, not tracked)
+opencode.local.json
+
+# bv (beads viewer) local config and caches
+.bv/
+.beads/
