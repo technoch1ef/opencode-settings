@@ -14,12 +14,12 @@ import { tool, type Plugin } from "@opencode-ai/plugin";
 import { execFile } from "node:child_process";
 
 import {
-  compareBdIssuesDeterministic,
+  compareBrIssuesDeterministic,
   fixShellSnippetNewlines,
   guardSingleInProgress,
   inferAssigneeFromText,
   selectDeterministicReady,
-  type BdIssue,
+  type BrIssue,
 } from "../lib/village-shared";
 
 // Agent name to BD_ACTOR mapping
@@ -30,14 +30,14 @@ const AGENT_TO_ACTOR: Record<string, string> = {
 };
 
 
-function formatIssueLine(issue: BdIssue): string {
+function formatIssueLine(issue: BrIssue): string {
   const id = issue.id;
   const title = (issue.title ?? "").replace(/\s+/g, " ").trim();
   const status = (issue.status ?? "").trim();
   return `${id} | ${title || "(no title)"} | ${status || "(no status)"}`;
 }
 
-function formatOrphansRow(issue: BdIssue): string {
+function formatOrphansRow(issue: BrIssue): string {
   const id = issue.id;
   const title = (issue.title ?? "").replace(/\s+/g, " ").trim() || "(no title)";
   const status = (issue.status ?? "").trim() || "(no status)";
@@ -79,7 +79,7 @@ async function execFileText(
   });
 }
 
-async function execBdJson<T>(
+async function execBrJson<T>(
   args: string[],
   options: {
     cwd?: string;
@@ -91,24 +91,24 @@ async function execBdJson<T>(
     ...(options.actor ? { BD_ACTOR: options.actor } : {}),
   } as Record<string, string | undefined>;
 
-  const { stdout } = await execFileText("bd", args, { cwd: options.cwd, env });
+  const { stdout } = await execFileText("br", args, { cwd: options.cwd, env });
 
   try {
     return JSON.parse(stdout) as T;
   } catch (err) {
     throw new Error(
-      `Failed to parse JSON from: bd ${args.join(" ")}\n` +
+      `Failed to parse JSON from: br ${args.join(" ")}\n` +
         `Output: ${stdout.slice(0, 2000)}`
     );
   }
 }
 
-function firstBdIssue(value: unknown): BdIssue | undefined {
-  if (Array.isArray(value)) return value.length ? firstBdIssue(value[0]) : undefined;
+function firstBrIssue(value: unknown): BrIssue | undefined {
+  if (Array.isArray(value)) return value.length ? firstBrIssue(value[0]) : undefined;
   if (!value || typeof value !== "object") return undefined;
   const v = value as any;
   if (typeof v.id !== "string") return undefined;
-  return v as BdIssue;
+  return v as BrIssue;
 }
 
 function renderScaffoldDescription(args: {
@@ -282,10 +282,10 @@ const VillagePlugin: Plugin = async ({ client }) => {
             );
           }
 
-          const inProgress = (await execBdJson<BdIssue[]>(
+          const inProgress = (await execBrJson<BrIssue[]>(
             ["list", "--status", "in_progress", "--assignee", assignee, "--json"],
             { cwd: directory, actor: assignee }
-          )) as BdIssue[];
+          )) as BrIssue[];
 
           const guard = guardSingleInProgress(inProgress);
           if (guard.kind === "existing") {
@@ -300,25 +300,25 @@ const VillagePlugin: Plugin = async ({ client }) => {
             );
           }
 
-          const ready = (await execBdJson<BdIssue[]>(
+          const ready = (await execBrJson<BrIssue[]>(
             ["ready", "--assignee", assignee, "--json"],
             { cwd: directory, actor: assignee }
-          )) as BdIssue[];
+          )) as BrIssue[];
 
           const selected = selectDeterministicReady(ready);
           if (!selected) return `no ready beads for ${assignee}`;
-          if (!selected.id) throw new Error("bd ready returned an item without an id");
+          if (!selected.id) throw new Error("br ready returned an item without an id");
 
           const selectedAssignee = (selected.assignee ?? "").trim();
           if (selectedAssignee) {
-            // Most village beads are pre-assigned; `bd update --claim` fails for already-assigned issues.
+            // Most village beads are pre-assigned; `br update --claim` fails for already-assigned issues.
             if (selectedAssignee !== assignee) {
               throw new Error(
-                `bd ready returned ${selected.id} assigned to ${selectedAssignee}; expected ${assignee}`
+                `br ready returned ${selected.id} assigned to ${selectedAssignee}; expected ${assignee}`
               );
             }
 
-            const out = await execBdJson<BdIssue[]>(
+            const out = await execBrJson<BrIssue[]>(
               ["update", selected.id, "--assignee", assignee, "--status", "in_progress", "--json"],
               { cwd: directory, actor: assignee }
             );
@@ -338,9 +338,9 @@ const VillagePlugin: Plugin = async ({ client }) => {
             "--json",
           ];
 
-          let updated: BdIssue | undefined;
+          let updated: BrIssue | undefined;
           try {
-            const out = await execBdJson<BdIssue[]>(updateArgsWithClaim, {
+            const out = await execBrJson<BrIssue[]>(updateArgsWithClaim, {
               cwd: directory,
               actor: assignee,
             });
@@ -350,9 +350,9 @@ const VillagePlugin: Plugin = async ({ client }) => {
             const stdout = String((err as any)?.stdout ?? "");
             const text = `${stderr}\n${stdout}`.toLowerCase();
 
-            // Back-compat: older bd may not support --claim.
+            // Back-compat: older br may not support --claim.
             if (text.includes("--claim") && (text.includes("unknown") || text.includes("flag"))) {
-              const fallback = await execBdJson<BdIssue[]>(
+              const fallback = await execBrJson<BrIssue[]>(
                 [
                   "update",
                   selected.id,
@@ -367,7 +367,7 @@ const VillagePlugin: Plugin = async ({ client }) => {
               updated = Array.isArray(fallback) ? fallback[0] : undefined;
             } else if (text.includes("already claimed")) {
               // Race-safe: if another session claimed it first, only proceed if it's claimed by our assignee.
-              const shown = await execBdJson<BdIssue[]>(["show", selected.id, "--json"], {
+              const shown = await execBrJson<BrIssue[]>(["show", selected.id, "--json"], {
                 cwd: directory,
                 actor: assignee,
               });
@@ -375,11 +375,11 @@ const VillagePlugin: Plugin = async ({ client }) => {
               const currentAssignee = (current?.assignee ?? "").trim();
               if (currentAssignee && currentAssignee !== assignee) {
                 throw new Error(
-                  `bd update --claim failed: ${selected.id} already claimed by ${currentAssignee}`
+                  `br update --claim failed: ${selected.id} already claimed by ${currentAssignee}`
                 );
               }
 
-              const fallback = await execBdJson<BdIssue[]>(
+              const fallback = await execBrJson<BrIssue[]>(
                 [
                   "update",
                   selected.id,
@@ -465,7 +465,7 @@ const VillagePlugin: Plugin = async ({ client }) => {
           let epicID: string | undefined;
 
           try {
-            const epicOut = await execBdJson<BdIssue | BdIssue[]>(
+            const epicOut = await execBrJson<BrIssue | BrIssue[]>(
               [
                 "create",
                 args.epic_title,
@@ -480,9 +480,9 @@ const VillagePlugin: Plugin = async ({ client }) => {
               { cwd: directory, actor }
             );
 
-            const epic = firstBdIssue(epicOut);
+            const epic = firstBrIssue(epicOut);
             epicID = epic?.id;
-            if (!epicID) throw new Error("bd create epic returned no id");
+            if (!epicID) throw new Error("br create epic returned no id");
             createdIDs.push(epicID);
 
             const childRows: string[] = [];
@@ -493,7 +493,7 @@ const VillagePlugin: Plugin = async ({ client }) => {
                 skills: ["beads-workflow", "stack-typescript"],
               });
 
-              const out = await execBdJson<BdIssue | BdIssue[]>(
+              const out = await execBrJson<BrIssue | BrIssue[]>(
                 [
                   "create",
                   c.title,
@@ -511,8 +511,8 @@ const VillagePlugin: Plugin = async ({ client }) => {
                 ],
                 { cwd: directory, actor }
               );
-              const child = firstBdIssue(out);
-              if (!child?.id) throw new Error(`bd create child returned no id for: ${c.title}`);
+              const child = firstBrIssue(out);
+              if (!child?.id) throw new Error(`br create child returned no id for: ${c.title}`);
               createdIDs.push(child.id);
               childRows.push(
                 `${child.id} | ${c.title.replace(/\s+/g, " ").trim()} | ${c.assignee} | ${c.type} | ${c.priority}`
@@ -552,21 +552,21 @@ const VillagePlugin: Plugin = async ({ client }) => {
           const sessionAgent = (session as any)?.agent as string | undefined;
           const actor = sessionAgent && AGENT_TO_ACTOR[sessionAgent] ? AGENT_TO_ACTOR[sessionAgent] : undefined;
 
-          let openIssues: BdIssue[] = [];
-          let inProgressIssues: BdIssue[] = [];
+          let openIssues: BrIssue[] = [];
+          let inProgressIssues: BrIssue[] = [];
           try {
-            openIssues = await execBdJson<BdIssue[]>(["list", "--status", "open", "--json"], {
+            openIssues = await execBrJson<BrIssue[]>(["list", "--status", "open", "--json"], {
               cwd: directory,
               actor,
             });
-            inProgressIssues = await execBdJson<BdIssue[]>(
+            inProgressIssues = await execBrJson<BrIssue[]>(
               ["list", "--status", "in_progress", "--json"],
               { cwd: directory, actor }
             );
           } catch (err: any) {
             const msg = String(err?.message ?? err);
-            if (msg.toLowerCase().includes("enoent") && msg.toLowerCase().includes("bd")) {
-              return "bd not available; cannot inspect beads.";
+            if (msg.toLowerCase().includes("enoent") && msg.toLowerCase().includes("br")) {
+              return "br not available; cannot inspect beads.";
             }
             if (msg.includes(".beads") && msg.toLowerCase().includes("missing")) {
               return "No .beads database found; nothing to inspect.";
@@ -574,22 +574,22 @@ const VillagePlugin: Plugin = async ({ client }) => {
             throw err;
           }
 
-          const combined = new Map<string, BdIssue>();
+          const combined = new Map<string, BrIssue>();
           for (const i of [...openIssues, ...inProgressIssues]) {
             if (i?.id) combined.set(i.id, i);
           }
 
-          const all = [...combined.values()].sort(compareBdIssuesDeterministic);
+          const all = [...combined.values()].sort(compareBrIssuesDeterministic);
 
-          const ignoredEpics: BdIssue[] = [];
-          const scannedNonEpic: BdIssue[] = [];
+          const ignoredEpics: BrIssue[] = [];
+          const scannedNonEpic: BrIssue[] = [];
           for (const issue of all) {
             if (issue.issue_type === "epic") ignoredEpics.push(issue);
             else scannedNonEpic.push(issue);
           }
 
-          const orphans: BdIssue[] = [];
-          const suspect: BdIssue[] = [];
+          const orphans: BrIssue[] = [];
+          const suspect: BrIssue[] = [];
           for (const issue of scannedNonEpic) {
             const a = (issue.assignee ?? "").trim();
             if (!a) orphans.push(issue);
@@ -605,7 +605,7 @@ const VillagePlugin: Plugin = async ({ client }) => {
           const limit = args.limit ?? 20;
           const rows = [...orphans, ...suspect]
             .slice()
-            .sort(compareBdIssuesDeterministic)
+            .sort(compareBrIssuesDeterministic)
             .slice(0, limit)
             .map(formatOrphansRow);
 
@@ -621,7 +621,7 @@ const VillagePlugin: Plugin = async ({ client }) => {
             lines.push("No orphan/suspect non-epic beads found.");
           }
 
-          const ignoredAttention = new Map<string, { issue: BdIssue; reason: string }>();
+          const ignoredAttention = new Map<string, { issue: BrIssue; reason: string }>();
           for (const i of ignoredEpicsUnassigned) ignoredAttention.set(i.id, { issue: i, reason: "unassigned" });
           for (const i of ignoredEpicsSuspect)
             ignoredAttention.set(i.id, { issue: i, reason: "suspect assignee" });
@@ -630,7 +630,7 @@ const VillagePlugin: Plugin = async ({ client }) => {
             lines.push("Ignored epics:");
             const epicRows = [...ignoredAttention.values()]
               .map((v) => v)
-              .sort((a, b) => compareBdIssuesDeterministic(a.issue, b.issue))
+              .sort((a, b) => compareBrIssuesDeterministic(a.issue, b.issue))
               .slice(0, 5)
               .map(({ issue, reason }) => {
                 const base = formatOrphansRow(issue);
@@ -642,11 +642,11 @@ const VillagePlugin: Plugin = async ({ client }) => {
           if (!args.fix) return lines.join("\n");
 
           const changed: string[] = [];
-          const toFix = orphans.slice().sort(compareBdIssuesDeterministic);
+          const toFix = orphans.slice().sort(compareBrIssuesDeterministic);
           for (const issue of toFix) {
             const text = `${issue.title ?? ""}\n${issue.description ?? ""}\n${issue.notes ?? ""}`;
             const target = inferAssigneeFromText(text);
-            await execBdJson<BdIssue[]>(
+            await execBrJson<BrIssue[]>(
               ["update", issue.id, "--assignee", target, "--json"],
               { cwd: directory, actor }
             );

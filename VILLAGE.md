@@ -23,7 +23,7 @@ Private skills
 Running the workflow
 
 1. Start OpenCode in your project repo and use `mayor`.
-2. Mayor clarifies scope, drafts an epic + child beads, and creates them (preferred: `village_scaffold`; fallback: `bd create`).
+2. Mayor clarifies scope, drafts an epic + child beads, and creates them (preferred: `village_scaffold`; fallback: `br create`).
 3. Navigate to worker/overseer sessions: `ctrl+x right/left` (cycle children) and `ctrl+x up` (back to parent). Run `/village:work` to start.
 4. Worker implements, commits locally, then reassigns bead to overseer.
 5. Overseer runs checks and either closes the bead or returns it to worker.

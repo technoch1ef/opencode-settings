@@ -13,7 +13,7 @@ describe("fixShellSnippetNewlines", () => {
   test("replaces literal \\n separator tokens in shell code fences", () => {
     const input = [
       "```bash",
-      "bd create foo; \\nbd update bar --status in_progress",
+      "br create foo; \\nbr update bar --status in_progress",
       "```",
       "",
     ].join("\n");
@@ -23,8 +23,8 @@ describe("fixShellSnippetNewlines", () => {
     if (typeof out !== "string") throw new Error("Expected string output");
 
     expect(out).not.toContain("\\n");
-    expect(out).toContain("bd create foo;\n");
-    expect(out).toContain("bd update bar --status in_progress");
+    expect(out).toContain("br create foo;\n");
+    expect(out).toContain("br update bar --status in_progress");
   });
 
   test("is a no-op for non-string inputs", () => {
@@ -116,13 +116,13 @@ describe("inferAssigneeFromText", () => {
 });
 
 describe("work loop prompt invariants", () => {
-  test("prompts reference village_claim and do not use bd ready as claim path", () => {
+  test("prompts reference village_claim and do not use br ready as claim path", () => {
     expect(WORKER_WORK_LOOP_PROMPT).toContain("village_claim");
-    expect(WORKER_WORK_LOOP_PROMPT).not.toContain("bd ready --assignee worker");
+    expect(WORKER_WORK_LOOP_PROMPT).not.toContain("br ready --assignee worker");
     expect(WORKER_WORK_LOOP_PROMPT).not.toContain("--status in_progress");
 
     expect(OVERSEER_WORK_LOOP_PROMPT).toContain("village_claim");
-    expect(OVERSEER_WORK_LOOP_PROMPT).not.toContain("bd ready --assignee overseer");
+    expect(OVERSEER_WORK_LOOP_PROMPT).not.toContain("br ready --assignee overseer");
     expect(OVERSEER_WORK_LOOP_PROMPT).not.toContain("--status in_progress");
   });
 });

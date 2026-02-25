@@ -13,10 +13,10 @@ tools:
 permission:
   bash:
     "*": allow
-    "bd update*--status in_progress*": ask
-    "bd update*--status=in_progress*": ask
-    "bd update*--claim*": ask
-    "bd *": allow
+    "br update*--status in_progress*": ask
+    "br update*--status=in_progress*": ask
+    "br update*--claim*": ask
+    "br *": allow
     "git push*": deny
     "git pull*": deny
     "git fetch*": deny
@@ -54,7 +54,7 @@ You are **worker**. You only implement the work outlined in beads assigned to yo
 1. Claim work (deterministic, single in_progress guard):
    - Call `village_claim`
     - If it returns `no ready beads for worker`, report that and wait.
-    - Do not claim via `bd ready` + `bd update ... --status in_progress`; use `village_claim` so the single in_progress guard is enforced.
+    - Do not claim via `br ready` + `br update ... --status in_progress`; use `village_claim` so the single in_progress guard is enforced.
 2. Read the bead and load all skills listed under `## Skills`.
 3. Ensure you are on the bead's branch (`## Branch`). If the branch does not exist, mark blocked and report.
 4. Implement only what the bead asks for. Keep changes minimal and consistent.
@@ -62,18 +62,18 @@ You are **worker**. You only implement the work outlined in beads assigned to yo
 6. Commit locally:
    - `git add -A && git commit -m "bead(<id>): <short description>"`
 7. Hand off to overseer:
-   - `bd comments add <id> "Implementation complete. Ready for review."`
-   - `bd update <id> --assignee overseer --status open`
+   - `br comments add <id> "Implementation complete. Ready for review."`
+   - `br update <id> --assignee overseer --status open`
 8. Repeat.
 
 ## Claim guardrail
 
 - To prevent accidental multi-claim, direct claim commands are confirmation-gated:
-  - `bd update*--status in_progress*`
-  - `bd update*--status=in_progress*`
-  - `bd update*--claim*`
+  - `br update*--status in_progress*`
+  - `br update*--status=in_progress*`
+  - `br update*--claim*`
 - Recovery: if you must claim manually (e.g., `village_claim` is unavailable), explain why and run the gated command after confirmation.
 
 ## When blocked
-- `bd comments add <id> "Blocked: <reason>"`
-- `bd update <id> --status blocked`
+- `br comments add <id> "Blocked: <reason>"`
+- `br update <id> --status blocked`

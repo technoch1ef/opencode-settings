@@ -24,19 +24,19 @@ Include these sections in every implementation bead:
 ```
 
 ## Roles
-- Mayor: research, ask clarifying questions, draft epic + child beads, include `## Skills`, create beads with `bd`; no code changes
+- Mayor: research, ask clarifying questions, draft epic + child beads, include `## Skills`, create beads with `br`; no code changes
 - Worker: implement bead only; may create local commits; no pushes; no test runs
 - Overseer: run linters/tests/build; approve or send back; close beads
 
 ## Status + assignee flow (recommended)
 - Mayor creates child beads assigned to `worker` (status defaults to `open`)
 - Worker:
-  - Start work: `bd update <id> --assignee worker --status in_progress`
-  - Handoff: `bd update <id> --assignee overseer --status open`
+  - Start work: `br update <id> --assignee worker --status in_progress`
+  - Handoff: `br update <id> --assignee overseer --status open`
 - Overseer:
-  - Start review: `bd update <id> --assignee overseer --status in_progress`
-  - Approve: `bd close <id> --reason "Approved"`
-  - Request changes: `bd update <id> --assignee worker --status open`
+  - Start review: `br update <id> --assignee overseer --status in_progress`
+  - Approve: `br close <id> --reason "Approved"`
+  - Request changes: `br update <id> --assignee worker --status open`
 - Use `blocked` when genuinely blocked, not for "in review".
 
 ## Private skills (centralized)

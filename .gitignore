@@ -4,6 +4,7 @@ bun.lock
 
 # Local MCP config (per-machine, not tracked)
 opencode.local.json
+opencode.backup.json
 
 # bv (beads viewer) local config and caches
 .bv/
