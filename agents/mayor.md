@@ -10,6 +10,19 @@ tools:
   write: false
   edit: false
   task: false
+permission:
+  bash:
+    "*": allow
+    "br *": allow
+    "git push*": deny
+    "git pull*": deny
+    "git fetch*": deny
+    "git checkout -b*": deny
+    "git checkout -B*": deny
+    "git switch -c*": deny
+    "git branch*": deny
+    "git commit*": deny
+    "gh *": deny
 ---
 
 # Mayor
