@@ -111,14 +111,24 @@ function firstBrIssue(value: unknown): BrIssue | undefined {
   return v as BrIssue;
 }
 
+/**
+ * Detect if a body string already contains structured markdown sections
+ * (e.g. `## Context`, `## Skills`). When true, the body should be used
+ * directly as the bead description — no wrapping via renderScaffoldDescription.
+ */
+function isStructuredBody(body: string | undefined): boolean {
+  if (!body) return false;
+  return /^## (Context|Skills)/m.test(body);
+}
+
 function renderScaffoldDescription(args: {
   context?: string;
   branch: string;
-  skills?: string[];
+  skills: string[];
   acceptance?: string;
   notes?: string;
 }): string {
-  const skills = (args.skills ?? []).filter(Boolean);
+  const skills = args.skills.filter(Boolean);
 
   const lines: string[] = [];
   lines.push("## Context", "", (args.context ?? "").trim() || "(fill in)", "");
@@ -434,11 +444,13 @@ const VillagePlugin: Plugin = async ({ client }) => {
           const branch = args.branch.trim();
           if (!branch) throw new Error("branch is required");
 
-          const epicDescription = renderScaffoldDescription({
-            context: args.epic_body,
-            branch,
-            skills: ["beads-workflow", "stack-typescript"],
-          });
+          const epicDescription = isStructuredBody(args.epic_body)
+            ? args.epic_body!.trim()
+            : renderScaffoldDescription({
+                context: args.epic_body,
+                branch,
+                skills: [],
+              });
 
           const children = args.children ?? [];
           for (const c of children) {
@@ -487,11 +499,13 @@ const VillagePlugin: Plugin = async ({ client }) => {
 
             const childRows: string[] = [];
             for (const c of children) {
-              const childDescription = renderScaffoldDescription({
-                context: c.body,
-                branch,
-                skills: ["beads-workflow", "stack-typescript"],
-              });
+              const childDescription = isStructuredBody(c.body)
+                ? c.body!.trim()
+                : renderScaffoldDescription({
+                    context: c.body,
+                    branch,
+                    skills: [],
+                  });
 
               const out = await execBrJson<BrIssue | BrIssue[]>(
                 [
