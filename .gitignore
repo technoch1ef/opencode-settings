@@ -2,6 +2,9 @@ node_modules
 package.json
 bun.lock
 
+# local files
+opencode-notifier-state.json
+
 # Local MCP config (per-machine, not tracked)
 opencode.local.json
 opencode.backup.json
