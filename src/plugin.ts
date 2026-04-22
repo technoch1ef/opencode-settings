@@ -5,7 +5,7 @@
  *
  * Features:
  * - Injects BD_ACTOR environment variable based on current agent
- * - Provides tools: village_claim, village_detect_stack, village_ensure_branch, village_handoff, village_scaffold, village_orphans, village_status
+ * - Provides tools: village_claim, village_detect_stack, village_ensure_branch, village_handoff, village_lint, village_scaffold, village_orphans, village_status
  * - Monitors village session errors and status transitions
  */
 
@@ -17,6 +17,7 @@ import { createClaimTool } from "./tools/claim";
 import { createDetectStackTool } from "./tools/detect-stack";
 import { createEnsureBranchTool } from "./tools/ensure-branch";
 import { createHandoffTool } from "./tools/handoff";
+import { createLintTool } from "./tools/lint";
 import { createOrphansTool } from "./tools/orphans";
 import { createScaffoldTool } from "./tools/scaffold";
 import { createStatusTool } from "./tools/status";
@@ -113,6 +114,7 @@ const VillagePlugin: Plugin = async ({ client }) => {
       village_detect_stack: createDetectStackTool(),
       village_ensure_branch: createEnsureBranchTool(),
       village_handoff: createHandoffTool(helpers),
+      village_lint: createLintTool(helpers),
       village_scaffold: createScaffoldTool(helpers),
       village_orphans: createOrphansTool(helpers),
       village_status: createStatusTool(helpers),

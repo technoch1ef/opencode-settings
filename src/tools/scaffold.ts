@@ -7,6 +7,11 @@
 import { tool } from "@opencode-ai/plugin";
 import { detectStack, mergeSkills } from "../detect/stack";
 import { execBrJson, firstBrIssue } from "../lib/br";
+import {
+  defaultSkillRegistryPaths,
+  lintBeadBody,
+  scanSkillRegistry,
+} from "../lib/lint";
 import type { SessionHelpers } from "../lib/sessions";
 import type { BrIssue } from "../lib/shared";
 
@@ -185,6 +190,43 @@ export function createScaffoldTool(helpers: SessionHelpers) {
         return ["dry_run: true", ...planLines].join("\n");
       }
 
+      // Scan the skills registry for validation.
+      const registryPaths = defaultSkillRegistryPaths(directory);
+      const knownSkills = await scanSkillRegistry(registryPaths);
+
+      // Pre-render all child descriptions and lint them before creating anything.
+      const childDescriptions: string[] = [];
+      const lintErrors: string[] = [];
+
+      for (const c of children) {
+        const childDescription = isStructuredBody(c.body)
+          ? injectSkillsIntoBody(
+              c.body!.trim(),
+              mergeSkills(parseSkillsFromBody(c.body!), detectedSkills),
+            )
+          : renderScaffoldDescription({
+              context: c.body,
+              branch,
+              skills: detectedSkills,
+            });
+        childDescriptions.push(childDescription);
+
+        const isEpic = c.type === "epic";
+        const lint = lintBeadBody(childDescription, { isEpic, knownSkills });
+        if (!lint.ok) {
+          lintErrors.push(
+            `Child "${c.title}":\n${lint.errors.map((e) => `  - ${e}`).join("\n")}`,
+          );
+        }
+      }
+
+      if (lintErrors.length > 0) {
+        throw new Error(
+          `village_scaffold rejected: ${lintErrors.length} child bead(s) failed validation:\n\n` +
+            lintErrors.join("\n\n"),
+        );
+      }
+
       const createdIDs: string[] = [];
       let epicID: string | undefined;
 
@@ -210,17 +252,9 @@ export function createScaffoldTool(helpers: SessionHelpers) {
         createdIDs.push(epicID);
 
         const childRows: string[] = [];
-        for (const c of children) {
-          const childDescription = isStructuredBody(c.body)
-            ? injectSkillsIntoBody(
-                c.body!.trim(),
-                mergeSkills(parseSkillsFromBody(c.body!), detectedSkills),
-              )
-            : renderScaffoldDescription({
-                context: c.body,
-                branch,
-                skills: detectedSkills,
-              });
+        for (let i = 0; i < children.length; i++) {
+          const c = children[i];
+          const childDescription = childDescriptions[i];
 
           const out = await execBrJson<BrIssue | BrIssue[]>(
             [
