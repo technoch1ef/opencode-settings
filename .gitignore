@@ -1,6 +1,5 @@
 node_modules
-package.json
-bun.lock
+dist
 
 # local files
 opencode-notifier-state.json
