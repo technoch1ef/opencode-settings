@@ -18,14 +18,13 @@
   },
   "files": [
     "dist",
-    "assets",
-    "bin"
+    "assets"
   ],
   "bin": {
-    "opencode-village-init": "./bin/init.ts"
+    "opencode-village": "./dist/bin/init.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc -p tsconfig.bin.json",
     "typecheck": "tsc --noEmit",
     "test": "bun test"
   },
