@@ -5,6 +5,7 @@
  */
 
 import { tool } from "@opencode-ai/plugin";
+import { detectStack, mergeSkills } from "../detect/stack";
 import { execBrJson, firstBrIssue } from "../lib/br";
 import type { SessionHelpers } from "../lib/sessions";
 import type { BrIssue } from "../lib/shared";
@@ -17,6 +18,58 @@ import type { BrIssue } from "../lib/shared";
 export function isStructuredBody(body: string | undefined): boolean {
   if (!body) return false;
   return /^## (Context|Skills)/m.test(body);
+}
+
+/**
+ * Parse skill names from a `## Skills` markdown section.
+ *
+ * Expects lines like `- skill-name` between `## Skills` and the next `##` header.
+ */
+export function parseSkillsFromBody(body: string): string[] {
+  const match = body.match(/^## Skills\s*\n([\s\S]*?)(?=\n## |\n*$)/m);
+  if (!match) return [];
+
+  const section = match[1];
+  const skills: string[] = [];
+  for (const line of section.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("- ")) {
+      const skill = trimmed.slice(2).trim();
+      if (skill && !skill.startsWith("(")) {
+        skills.push(skill);
+      }
+    }
+  }
+  return skills;
+}
+
+/**
+ * Replace (or inject) the `## Skills` section in a structured body with merged skills.
+ */
+export function injectSkillsIntoBody(body: string, skills: string[]): string {
+  const skillBlock = skills.map((s) => `- ${s}`).join("\n");
+
+  // Replace existing ## Skills section
+  const replaced = body.replace(
+    /^## Skills\s*\n[\s\S]*?(?=\n## |\n*$)/m,
+    `## Skills\n\n${skillBlock}`,
+  );
+
+  if (replaced !== body) return replaced;
+
+  // No ## Skills section found — inject after ## Context (or at top if no Context)
+  const contextMatch = body.match(/^(## Context[\s\S]*?)(\n## )/m);
+  if (contextMatch) {
+    const idx = (contextMatch.index ?? 0) + contextMatch[1].length;
+    return (
+      body.slice(0, idx) +
+      `\n\n## Skills\n\n${skillBlock}\n` +
+      body.slice(idx)
+    );
+  }
+
+  // Fallback: prepend
+  return `## Skills\n\n${skillBlock}\n\n${body}`;
 }
 
 /**
@@ -95,12 +148,18 @@ export function createScaffoldTool(helpers: SessionHelpers) {
       const branch = args.branch.trim();
       if (!branch) throw new Error("branch is required");
 
+      // Auto-detect stack skills from the target directory.
+      const detectedSkills = await detectStack(directory);
+
       const epicDescription = isStructuredBody(args.epic_body)
-        ? args.epic_body!.trim()
+        ? injectSkillsIntoBody(
+            args.epic_body!.trim(),
+            mergeSkills(parseSkillsFromBody(args.epic_body!), detectedSkills),
+          )
         : renderScaffoldDescription({
             context: args.epic_body,
             branch,
-            skills: [],
+            skills: detectedSkills,
           });
 
       const children = args.children ?? [];
@@ -153,11 +212,14 @@ export function createScaffoldTool(helpers: SessionHelpers) {
         const childRows: string[] = [];
         for (const c of children) {
           const childDescription = isStructuredBody(c.body)
-            ? c.body!.trim()
+            ? injectSkillsIntoBody(
+                c.body!.trim(),
+                mergeSkills(parseSkillsFromBody(c.body!), detectedSkills),
+              )
             : renderScaffoldDescription({
                 context: c.body,
                 branch,
-                skills: [],
+                skills: detectedSkills,
               });
 
           const out = await execBrJson<BrIssue | BrIssue[]>(
