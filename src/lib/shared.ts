@@ -6,6 +6,7 @@ export type BrIssue = {
   status?: string;
   priority?: number;
   created_at?: string;
+  updated_at?: string;
   assignee?: string;
   issue_type?: string;
   description?: string;

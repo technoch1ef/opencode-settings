@@ -1,6 +1,8 @@
 /**
  * Tools barrel — re-exports all tool factories.
  */
+export { createBoardTool, formatAge, formatBoardEntry, renderBoard, buildBoardData } from "./board";
+export type { BoardData } from "./board";
 export { createClaimTool, parseBranchFromBody } from "./claim";
 export { createDetectStackTool } from "./detect-stack";
 export { createEnsureBranchTool, ensureBranch, detectBaseBranch } from "./ensure-branch";
