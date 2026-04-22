@@ -86,9 +86,8 @@ Use this workflow:
 4. Ensure you are on the bead's branch (\`## Branch\`); if missing, mark blocked and report
 5. Implement only what the bead asks for (keep changes minimal)
 6. Commit locally (no push): \`git add -A && git commit -m "bead(<id>): <short description>"\`
-7. Hand off to overseer:
-   - \`br comments add <id> "Implementation complete. Ready for review."\`
-   - \`br update <id> --assignee overseer --status open\`
+7. Hand off to inspector:
+   - Call \`village_handoff\` with \`{ bead: "<id>", to: "inspector", note: "Implementation complete. Ready for review." }\`
 8. Repeat from step 1.`;
 
 export const OVERSEER_WORK_LOOP_PROMPT = `Claim the next bead assigned to overseer and start reviewing it.

@@ -10,7 +10,7 @@ Key pieces
 - Agents: `agents/mayor.md`, `agents/worker.md`, `agents/overseer.md`
 - Plugin: `plugins/village.ts`
   - Injects `BD_ACTOR`
-  - Adds tools: `village_claim`, `village_scaffold`, `village_orphans`, `village_status`
+  - Adds tools: `village_claim`, `village_handoff`, `village_scaffold`, `village_orphans`, `village_status`
 - Public skills: `skills/*/SKILL.md`
 - Private skills (local-only): `skills-private/*/SKILL.md` (gitignored)
 

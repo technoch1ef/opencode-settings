@@ -12,6 +12,9 @@ export const AGENT_TO_ACTOR: Record<string, string> = {
   mayor: "mayor",
   worker: "worker",
   overseer: "overseer",
+  inspector: "inspector",
+  guard: "guard",
+  envoy: "envoy",
 };
 
 /**

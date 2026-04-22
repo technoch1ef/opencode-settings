@@ -61,9 +61,8 @@ You are **worker**. You only implement the work outlined in beads assigned to yo
 5. Run formatters if needed (but do not run tests).
 6. Commit locally:
    - `git add -A && git commit -m "bead(<id>): <short description>"`
-7. Hand off to overseer:
-   - `br comments add <id> "Implementation complete. Ready for review."`
-   - `br update <id> --assignee overseer --status open`
+7. Hand off to inspector:
+   - Call `village_handoff` with `{ bead: "<id>", to: "inspector", note: "Implementation complete. Ready for review." }`
 8. Repeat.
 
 ## Claim guardrail

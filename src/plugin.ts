@@ -5,7 +5,7 @@
  *
  * Features:
  * - Injects BD_ACTOR environment variable based on current agent
- * - Provides tools: village_claim, village_scaffold, village_orphans, village_status
+ * - Provides tools: village_claim, village_handoff, village_scaffold, village_orphans, village_status
  * - Monitors village session errors and status transitions
  */
 
@@ -14,6 +14,7 @@ import { AGENT_TO_ACTOR } from "./lib/br";
 import { createSessionHelpers } from "./lib/sessions";
 import { fixShellSnippetNewlines } from "./lib/shared";
 import { createClaimTool } from "./tools/claim";
+import { createHandoffTool } from "./tools/handoff";
 import { createOrphansTool } from "./tools/orphans";
 import { createScaffoldTool } from "./tools/scaffold";
 import { createStatusTool } from "./tools/status";
@@ -107,6 +108,7 @@ const VillagePlugin: Plugin = async ({ client }) => {
 
     tool: {
       village_claim: createClaimTool(helpers),
+      village_handoff: createHandoffTool(helpers),
       village_scaffold: createScaffoldTool(helpers),
       village_orphans: createOrphansTool(helpers),
       village_status: createStatusTool(helpers),

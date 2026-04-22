@@ -125,4 +125,10 @@ describe("work loop prompt invariants", () => {
     expect(OVERSEER_WORK_LOOP_PROMPT).not.toContain("br ready --assignee overseer");
     expect(OVERSEER_WORK_LOOP_PROMPT).not.toContain("--status in_progress");
   });
+
+  test("worker prompt uses village_handoff instead of two-step", () => {
+    expect(WORKER_WORK_LOOP_PROMPT).toContain("village_handoff");
+    expect(WORKER_WORK_LOOP_PROMPT).not.toContain("br comments add");
+    expect(WORKER_WORK_LOOP_PROMPT).not.toContain("--assignee overseer");
+  });
 });
