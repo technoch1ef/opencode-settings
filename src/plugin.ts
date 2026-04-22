@@ -21,6 +21,7 @@ import { createLintTool } from "./tools/lint";
 import { createOrphansTool } from "./tools/orphans";
 import { createScaffoldTool } from "./tools/scaffold";
 import { createStatusTool } from "./tools/status";
+import { createWorktreesTool } from "./tools/worktrees";
 
 /**
  * Create the village event handler for session error/status monitoring.
@@ -118,6 +119,7 @@ const VillagePlugin: Plugin = async ({ client }) => {
       village_scaffold: createScaffoldTool(helpers),
       village_orphans: createOrphansTool(helpers),
       village_status: createStatusTool(helpers),
+      village_worktrees: createWorktreesTool(helpers),
     },
 
     event: createEventHandler(helpers),

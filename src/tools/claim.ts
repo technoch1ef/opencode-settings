@@ -16,6 +16,11 @@ import {
   selectDeterministicReady,
   type BrIssue,
 } from "../lib/shared";
+import {
+  checkWorktreeConflict,
+  postWorktreeComment,
+  resolveWorktreePath,
+} from "../lib/worktree";
 import { ensureBranch, type EnsureBranchResult } from "./ensure-branch";
 
 /**
@@ -102,6 +107,9 @@ export function createClaimTool(helpers: SessionHelpers) {
         );
       }
 
+      // Resolve worktree path for conflict detection.
+      const worktreePath = await resolveWorktreePath(directory);
+
       const inProgress = (await execBrJson<BrIssue[]>(
         ["list", "--status", "in_progress", "--assignee", assignee, "--json"],
         { cwd: directory, actor: assignee },
@@ -136,6 +144,17 @@ export function createClaimTool(helpers: SessionHelpers) {
         throw new Error(
           `Multiple in_progress beads for ${assignee}; refusing to claim a new one.\n` +
             lines.join("\n"),
+        );
+      }
+
+      // Check for worktree conflicts before claiming.
+      const conflict = await checkWorktreeConflict(worktreePath, assignee, {
+        cwd: directory,
+        actor: assignee,
+      });
+      if (conflict) {
+        return (
+          `worktree_conflict: ${conflict.beadId} held by ${conflict.assignee} in ${conflict.worktreePath}`
         );
       }
 
@@ -174,6 +193,11 @@ export function createClaimTool(helpers: SessionHelpers) {
           status: "in_progress",
           assignee,
         };
+        // Post worktree comment after successful claim.
+        await safePostWorktreeComment(claimed.id, worktreePath, {
+          cwd: directory,
+          actor: assignee,
+        });
         // Ensure epic branch for worker claims.
         let branchInfo: string | undefined;
         if (assignee === "worker") {
@@ -259,6 +283,11 @@ export function createClaimTool(helpers: SessionHelpers) {
         status: "in_progress",
         assignee,
       };
+      // Post worktree comment after successful claim.
+      await safePostWorktreeComment(claimed.id, worktreePath, {
+        cwd: directory,
+        actor: assignee,
+      });
       // Ensure epic branch for worker claims.
       let branchInfo: string | undefined;
       if (assignee === "worker") {
@@ -268,4 +297,19 @@ export function createClaimTool(helpers: SessionHelpers) {
       return branchInfo ? `${line}\n${branchInfo}` : line;
     },
   });
+}
+
+/**
+ * Best-effort worktree comment posting. Does not throw on failure.
+ */
+async function safePostWorktreeComment(
+  beadId: string,
+  worktreePath: string,
+  options: { cwd?: string; actor?: string },
+): Promise<void> {
+  try {
+    await postWorktreeComment(beadId, worktreePath, options);
+  } catch {
+    // Non-critical — claim still succeeds without the comment.
+  }
 }
