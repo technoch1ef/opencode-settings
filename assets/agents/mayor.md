@@ -86,4 +86,4 @@ Implementation beads should include:
 1. Investigate and propose a plan.
 2. Draft epic + child beads (with `## Skills`).
 3. Create beads with `br create` (br auto-discovers `.beads/*.db`).
-4. Ensure the local branch referenced by the epic exists (workers do not create branches).
+4. The epic branch referenced in `## Branch` will be created automatically by `village_ensure_branch` when a worker first claims a child bead — no manual branch creation needed.

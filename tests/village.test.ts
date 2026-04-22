@@ -131,4 +131,11 @@ describe("work loop prompt invariants", () => {
     expect(WORKER_WORK_LOOP_PROMPT).not.toContain("br comments add");
     expect(WORKER_WORK_LOOP_PROMPT).not.toContain("--assignee overseer");
   });
+
+  test("worker prompt references village_ensure_branch for branch management", () => {
+    expect(WORKER_WORK_LOOP_PROMPT).toContain("village_ensure_branch");
+    expect(WORKER_WORK_LOOP_PROMPT).toContain("village_claim");
+    // Step 4 should mention that village_claim handles branch setup.
+    expect(WORKER_WORK_LOOP_PROMPT).toContain("placed you on the bead's branch");
+  });
 });

@@ -83,7 +83,9 @@ Use this workflow:
    - \`no ready beads for worker\` => report that and wait
 2. Read the bead details and handoff packet: \`br show <id> --json\`
 3. Load skills listed under \`## Skills\`
-4. Ensure you are on the bead's branch (\`## Branch\`); if missing, mark blocked and report
+4. \`village_claim\` has placed you on the bead's branch and refreshed it from the default base; verify with \`git status\`.
+   - If \`village_ensure_branch\` returned \`skipped\` due to dirty tree, commit/stash first then re-run \`village_ensure_branch\`.
+   - If the branch does not exist and is not an \`epic/*\` branch, mark blocked and report.
 5. Implement only what the bead asks for (keep changes minimal)
 6. Commit locally (no push): \`git add -A && git commit -m "bead(<id>): <short description>"\`
 7. Hand off to inspector:

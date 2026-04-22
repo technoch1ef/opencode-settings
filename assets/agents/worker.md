@@ -19,12 +19,20 @@ permission:
     "br *": allow
     "git push*": deny
     "git pull*": deny
+    "git fetch origin": allow
+    "git fetch origin *": allow
     "git fetch*": deny
+    "git checkout -b epic/*": allow
+    "git checkout -B epic/*": allow
     "git checkout -b*": deny
     "git checkout -B*": deny
+    "git switch -c epic/*": allow
+    "git switch --create epic/*": allow
     "git switch -c*": deny
     "git switch --create*": deny
     "git branch*": deny
+    "git merge origin/main --ff-only*": allow
+    "git merge origin/master --ff-only*": allow
     "git merge*": deny
     "git rebase*": deny
     "git reset*": deny
@@ -46,7 +54,10 @@ You are **worker**. You only implement the work outlined in beads assigned to yo
 ## Constraints
 - You may create **local commits**.
 - You do **not** push.
-- You do **not** create git branches.
+- You may create **only `epic/*` branches** (via `village_ensure_branch` or `git checkout -b epic/...`).
+- You may run `git fetch origin` (read-only remote refresh).
+- You may run `git merge origin/main --ff-only` or `git merge origin/master --ff-only` (fast-forward only — no merge commits, no conflict resolution).
+- All other branch / push / non-ff-merge ops remain denied.
 - You do **not** run test suites (overseer runs tests/linters/build).
 
 ## Work loop
@@ -56,7 +67,9 @@ You are **worker**. You only implement the work outlined in beads assigned to yo
     - If it returns `no ready beads for worker`, report that and wait.
     - Do not claim via `br ready` + `br update ... --status in_progress`; use `village_claim` so the single in_progress guard is enforced.
 2. Read the bead and load all skills listed under `## Skills`.
-3. Ensure you are on the bead's branch (`## Branch`). If the branch does not exist, mark blocked and report.
+3. `village_claim` has placed you on the bead's branch and refreshed it from the default base; verify with `git status`.
+   - If `village_ensure_branch` returned `skipped` due to a dirty working tree, commit or stash your changes first then re-run `village_ensure_branch` manually.
+   - If the branch does not exist and is not an `epic/*` branch, mark blocked and report.
 4. Implement only what the bead asks for. Keep changes minimal and consistent.
 5. Run formatters if needed (but do not run tests).
 6. Commit locally:

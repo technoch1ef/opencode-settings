@@ -1,6 +1,10 @@
 /**
  * `village_claim` tool — deterministic bead claiming with single in_progress guard.
  *
+ * After a successful claim, if the bead body contains a `## Branch` section
+ * referencing an `epic/*` branch, `village_ensure_branch` is called automatically
+ * to create / checkout / fast-forward the branch.
+ *
  * @module
  */
 
@@ -12,6 +16,63 @@ import {
   selectDeterministicReady,
   type BrIssue,
 } from "../lib/shared";
+import { ensureBranch, type EnsureBranchResult } from "./ensure-branch";
+
+/**
+ * Parse the `## Branch` section from a bead body.
+ *
+ * Supports both fenced (`` `epic/foo` ``) and plain (`epic/foo`) formats.
+ * Returns `undefined` if no branch section is found.
+ */
+export function parseBranchFromBody(
+  body: string | undefined | null,
+): string | undefined {
+  if (!body) return undefined;
+
+  // Match `## Branch` header followed by a line containing the branch name.
+  const match = body.match(
+    /##\s+Branch\s*\n+\s*(?:`([^`]+)`|(\S+))/i,
+  );
+  if (!match) return undefined;
+  return (match[1] ?? match[2])?.trim() || undefined;
+}
+
+/**
+ * Format the branch-ensure result as a human-readable suffix for the claim message.
+ */
+function formatBranchResult(result: EnsureBranchResult): string {
+  const parts = [
+    `branch: ${result.branch}`,
+    `base: ${result.base}`,
+    `action: ${result.action}`,
+  ];
+  if (result.warnings.length) {
+    parts.push(`warnings: ${result.warnings.join("; ")}`);
+  }
+  return parts.join(" | ");
+}
+
+/**
+ * Attempt to ensure the epic branch for a claimed bead.
+ *
+ * Only triggers for branches matching `^epic/`. Returns `undefined` for
+ * non-epic branches or beads without a `## Branch` section.
+ */
+async function maybeEnsureBranch(
+  issue: BrIssue,
+  directory: string,
+): Promise<string | undefined> {
+  const branch = parseBranchFromBody(issue.description);
+  if (!branch) return undefined;
+  if (!/^epic\//.test(branch)) return undefined;
+
+  try {
+    const result = await ensureBranch({ branch, directory });
+    return formatBranchResult(result);
+  } catch (err: any) {
+    return `branch-ensure failed: ${String(err?.message ?? err)}`;
+  }
+}
 
 /**
  * Create the `village_claim` tool definition, bound to session helpers.
@@ -48,7 +109,26 @@ export function createClaimTool(helpers: SessionHelpers) {
 
       const guard = guardSingleInProgress(inProgress);
       if (guard.kind === "existing") {
-        return `existing in_progress: ${formatIssueLine(guard.issue)}`;
+        // For existing in_progress, also ensure the branch (if worker).
+        let branchInfo: string | undefined;
+        if (assignee === "worker") {
+          // guard.issue may lack .description; fetch full bead if needed.
+          let issue = guard.issue;
+          if (!issue.description) {
+            try {
+              const full = await execBrJson<BrIssue[]>(
+                ["show", issue.id, "--json"],
+                { cwd: directory, actor: assignee },
+              );
+              issue = (Array.isArray(full) ? full[0] : undefined) ?? issue;
+            } catch {
+              // Best-effort; proceed without description.
+            }
+          }
+          branchInfo = await maybeEnsureBranch(issue, directory);
+        }
+        const line = `existing in_progress: ${formatIssueLine(guard.issue)}`;
+        return branchInfo ? `${line}\n${branchInfo}` : line;
       }
 
       if (guard.kind === "multiple") {
@@ -94,7 +174,13 @@ export function createClaimTool(helpers: SessionHelpers) {
           status: "in_progress",
           assignee,
         };
-        return `claimed: ${formatIssueLine(claimed)}`;
+        // Ensure epic branch for worker claims.
+        let branchInfo: string | undefined;
+        if (assignee === "worker") {
+          branchInfo = await maybeEnsureBranch(claimed, directory);
+        }
+        const line = `claimed: ${formatIssueLine(claimed)}`;
+        return branchInfo ? `${line}\n${branchInfo}` : line;
       }
 
       const updateArgsWithClaim = [
@@ -173,7 +259,13 @@ export function createClaimTool(helpers: SessionHelpers) {
         status: "in_progress",
         assignee,
       };
-      return `claimed: ${formatIssueLine(claimed)}`;
+      // Ensure epic branch for worker claims.
+      let branchInfo: string | undefined;
+      if (assignee === "worker") {
+        branchInfo = await maybeEnsureBranch(claimed, directory);
+      }
+      const line = `claimed: ${formatIssueLine(claimed)}`;
+      return branchInfo ? `${line}\n${branchInfo}` : line;
     },
   });
 }
