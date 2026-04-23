@@ -28,16 +28,18 @@ export function isStructuredBody(body: string | undefined): boolean {
 /**
  * Parse skill names from a `## Skills` markdown section.
  *
- * Expects lines like `- skill-name` between `## Skills` and the next `##` header.
+ * Uses line-by-line scanning (not regex) to avoid multiline `$` anchor bugs.
+ * Collects `- skill-name` entries between `## Skills` and the next `##` header.
  */
 export function parseSkillsFromBody(body: string): string[] {
-  const match = body.match(/^## Skills\s*\n([\s\S]*?)(?=\n## |\n*$)/m);
-  if (!match) return [];
+  const lines = body.split("\n");
+  const idx = lines.findIndex((l) => /^## Skills\s*$/.test(l));
+  if (idx === -1) return [];
 
-  const section = match[1];
   const skills: string[] = [];
-  for (const line of section.split("\n")) {
-    const trimmed = line.trim();
+  for (let i = idx + 1; i < lines.length; i++) {
+    if (lines[i].startsWith("## ")) break;
+    const trimmed = lines[i].trim();
     if (trimmed.startsWith("- ")) {
       const skill = trimmed.slice(2).trim();
       if (skill && !skill.startsWith("(")) {
@@ -50,30 +52,50 @@ export function parseSkillsFromBody(body: string): string[] {
 
 /**
  * Replace (or inject) the `## Skills` section in a structured body with merged skills.
+ *
+ * Uses line-by-line scanning (not regex) to avoid multiline `$` anchor bugs.
  */
 export function injectSkillsIntoBody(body: string, skills: string[]): string {
   const skillBlock = skills.map((s) => `- ${s}`).join("\n");
+  const lines = body.split("\n");
 
-  // Replace existing ## Skills section
-  const replaced = body.replace(
-    /^## Skills\s*\n[\s\S]*?(?=\n## |\n*$)/m,
-    `## Skills\n\n${skillBlock}`,
-  );
+  const startIdx = lines.findIndex((l) => /^## Skills\s*$/.test(l));
 
-  if (replaced !== body) return replaced;
+  if (startIdx !== -1) {
+    // Find end of Skills section (next ## header or end of body).
+    let endIdx = lines.length;
+    for (let i = startIdx + 1; i < lines.length; i++) {
+      if (lines[i].startsWith("## ")) {
+        endIdx = i;
+        break;
+      }
+    }
 
-  // No ## Skills section found — inject after ## Context (or at top if no Context)
-  const contextMatch = body.match(/^(## Context[\s\S]*?)(\n## )/m);
-  if (contextMatch) {
-    const idx = (contextMatch.index ?? 0) + contextMatch[1].length;
-    return (
-      body.slice(0, idx) +
-      `\n\n## Skills\n\n${skillBlock}\n` +
-      body.slice(idx)
+    const before = lines.slice(0, startIdx);
+    const after = lines.slice(endIdx);
+    return [...before, "## Skills", "", skillBlock, "", ...after].join("\n");
+  }
+
+  // No ## Skills section — inject after ## Context (or at top if no Context).
+  const contextIdx = lines.findIndex((l) => /^## Context/.test(l));
+  if (contextIdx !== -1) {
+    // Find end of Context section.
+    let contextEnd = lines.length;
+    for (let i = contextIdx + 1; i < lines.length; i++) {
+      if (lines[i].startsWith("## ")) {
+        contextEnd = i;
+        break;
+      }
+    }
+
+    const before = lines.slice(0, contextEnd);
+    const after = lines.slice(contextEnd);
+    return [...before, "", "## Skills", "", skillBlock, "", ...after].join(
+      "\n",
     );
   }
 
-  // Fallback: prepend
+  // Fallback: prepend.
   return `## Skills\n\n${skillBlock}\n\n${body}`;
 }
 
