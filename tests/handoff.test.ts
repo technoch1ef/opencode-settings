@@ -40,14 +40,11 @@ describe("HANDOFF_MATRIX", () => {
     expect(HANDOFF_MATRIX.inspector.has("mayor")).toBe(true);
   });
 
-  test("guard can hand off to worker and envoy", () => {
-    expect(HANDOFF_MATRIX.guard.size).toBe(2);
+  test("guard can hand off to worker, inspector, and envoy", () => {
+    expect(HANDOFF_MATRIX.guard.size).toBe(3);
     expect(HANDOFF_MATRIX.guard.has("worker")).toBe(true);
+    expect(HANDOFF_MATRIX.guard.has("inspector")).toBe(true);
     expect(HANDOFF_MATRIX.guard.has("envoy")).toBe(true);
-  });
-
-  test("guard cannot hand off to inspector", () => {
-    expect(HANDOFF_MATRIX.guard.has("inspector")).toBe(false);
   });
 
   test("mayor can only hand off to worker", () => {
@@ -103,8 +100,8 @@ describe("isHandoffAllowed", () => {
     expect(isHandoffAllowed("worker", "envoy")).toBe(false);
   });
 
-  test("guard -> inspector is not allowed", () => {
-    expect(isHandoffAllowed("guard", "inspector")).toBe(false);
+  test("guard -> inspector is allowed (defensive return)", () => {
+    expect(isHandoffAllowed("guard", "inspector")).toBe(true);
   });
 
   test("envoy -> any is not allowed", () => {
