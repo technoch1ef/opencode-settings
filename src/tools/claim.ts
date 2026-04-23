@@ -12,8 +12,8 @@ import { tool } from "@opencode-ai/plugin";
 import { execBrJson, formatIssueLine } from "../lib/br";
 import type { SessionHelpers } from "../lib/sessions";
 import {
+  compareBrIssuesDeterministic,
   guardSingleInProgress,
-  selectDeterministicReady,
   type BrIssue,
 } from "../lib/shared";
 import {
@@ -22,6 +22,7 @@ import {
   resolveWorktreePath,
 } from "../lib/worktree";
 import { ensureBranch, type EnsureBranchResult } from "./ensure-branch";
+import { hasSpecialistMarker, SPECIALISTS } from "./invoke";
 
 /**
  * Parse the `## Branch` section from a bead body.
@@ -79,16 +80,79 @@ async function maybeEnsureBranch(
   }
 }
 
+/** Default claim roles — these never pick up specialist-tagged beads. */
+const DEFAULT_CLAIM_ROLES = new Set(["worker", "inspector", "guard"]);
+
+/** All roles accepted by village_claim (default + specialist). */
+type ClaimRole = "worker" | "inspector" | "guard" | "envoy";
+
+/**
+ * Fetch comments for a bead and return them as an array.
+ */
+async function fetchBeadComments(
+  beadId: string,
+  options: { cwd?: string; actor?: string },
+): Promise<Array<{ text?: string }>> {
+  try {
+    return await execBrJson<Array<{ text?: string }>>(
+      ["comments", "list", beadId, "--json"],
+      options,
+    );
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Select the first ready bead that passes specialist filtering.
+ *
+ * - For default roles (worker/inspector/guard): skip beads with any specialist marker.
+ * - For specialist roles (envoy): only pick beads with the matching specialist marker.
+ *
+ * Returns `null` if no matching bead is found.
+ */
+export async function selectFilteredReady(
+  ready: BrIssue[],
+  role: ClaimRole,
+  options: { cwd?: string; actor?: string },
+): Promise<BrIssue | null> {
+  const sorted = ready.slice().sort(compareBrIssuesDeterministic);
+  const isDefault = DEFAULT_CLAIM_ROLES.has(role);
+  const isSpecialist = SPECIALISTS.has(role as any);
+
+  for (const bead of sorted) {
+    if (!bead.id) continue;
+    const comments = await fetchBeadComments(bead.id, options);
+
+    if (isDefault) {
+      // Default roles skip beads with any specialist marker.
+      if (hasSpecialistMarker(comments)) continue;
+      return bead;
+    }
+
+    if (isSpecialist) {
+      // Specialist roles only pick beads with matching marker.
+      if (hasSpecialistMarker(comments, role)) return bead;
+      continue;
+    }
+
+    // Fallback: no filtering.
+    return bead;
+  }
+
+  return null;
+}
+
 /**
  * Create the `village_claim` tool definition, bound to session helpers.
  */
 export function createClaimTool(helpers: SessionHelpers) {
   return tool({
     description:
-      "Deterministically claim the next ready bead for worker/inspector/guard, enforcing a single in_progress bead per assignee.",
+      "Deterministically claim the next ready bead for worker/inspector/guard/envoy, enforcing a single in_progress bead per assignee.",
     args: {
       assignee: tool.schema
-        .enum(["worker", "inspector", "guard"] as const)
+        .enum(["worker", "inspector", "guard", "envoy"] as const)
         .optional(),
       directory: tool.schema.string().optional(),
     },
@@ -102,16 +166,18 @@ export function createClaimTool(helpers: SessionHelpers) {
         args.assignee ??
         (sessionAgent === "worker" ||
         sessionAgent === "inspector" ||
-        sessionAgent === "guard"
+        sessionAgent === "guard" ||
+        sessionAgent === "envoy"
           ? sessionAgent
           : undefined);
       if (
         assignee !== "worker" &&
         assignee !== "inspector" &&
-        assignee !== "guard"
+        assignee !== "guard" &&
+        assignee !== "envoy"
       ) {
         throw new Error(
-          `village_claim requires assignee=worker|inspector|guard (session agent: ${sessionAgent ?? "unknown"})`,
+          `village_claim requires assignee=worker|inspector|guard|envoy (session agent: ${sessionAgent ?? "unknown"})`,
         );
       }
 
@@ -171,7 +237,12 @@ export function createClaimTool(helpers: SessionHelpers) {
         { cwd: directory, actor: assignee },
       )) as BrIssue[];
 
-      const selected = selectDeterministicReady(ready);
+      // Specialist-aware selection: default roles skip specialist-tagged beads;
+      // specialist roles only pick beads with matching marker.
+      const selected = await selectFilteredReady(ready, assignee as ClaimRole, {
+        cwd: directory,
+        actor: assignee,
+      });
       if (!selected) return `no ready beads for ${assignee}`;
       if (!selected.id) throw new Error("br ready returned an item without an id");
 
