@@ -17,22 +17,7 @@
       "*": "allow"
     }
   },
-  "agent": {
-    "github": {
-      "description": "GitHub-focused agent for repository management, PRs, issues, and automation",
-      "prompt": "You are a GitHub expert. Help with repository management, pull requests, issue triage, branch management, and GitHub automation. Use GitHub tools to perform operations. Always provide clear feedback about what was done and next steps.",
-      "tools": {
-        "bash": true,
-        "edit": true,
-        "write": true,
-        "read": true,
-        "grep": true,
-        "glob": true,
-        "github_*": true,
-        "gh_*": true
-      }
-    }
-  },
+  "agent": {},
   "instructions": [".opencode/github-rules.md"],
   "command": {
     "village:work": {
