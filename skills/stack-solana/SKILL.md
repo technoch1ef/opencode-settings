@@ -36,6 +36,31 @@ description: Solana (Anchor-first) Rust programs + TS client workflow, security 
 - Close/realloc/rent: funds go to expected recipient; no data corruption
 - Logging: `msg!` does not print secrets
 
+## Check Matrix
+
+Guard runs these commands in order. Prefer repo scripts (Makefile, package.json, justfile) when present.
+
+**Rust / Anchor program checks:**
+
+| Check | Command | Notes |
+|-------|---------|-------|
+| Format | `cargo fmt --all -- --check` | Fail if unformatted code |
+| Clippy | `cargo clippy --all-targets --all-features -D warnings` | Treat warnings as errors |
+| Build | `anchor build` (Anchor) or `cargo build` (native) | Use anchor build if `Anchor.toml` exists |
+| Test | `anchor test` (Anchor) or `cargo test` (native) | Use anchor test if `Anchor.toml` exists |
+
+**TypeScript client checks (if `package.json` exists alongside programs):**
+
+| Check | Command | Notes |
+|-------|---------|-------|
+| Lint | `<pm> run lint` | Skip if no `lint` script |
+| Typecheck | `<pm> run typecheck` or `npx tsc --noEmit` | Prefer script; fall back to tsc |
+| Test | `<pm> test` | Skip if no `test` script |
+
+Where `<pm>` is the detected package manager (npm / pnpm / yarn / bun).
+
+Run ALL checks even if one fails early — report the full matrix.
+
 ## Review Checklist
 - Account validation constraints are present and correct (`has_one`, `seeds`, `bump`, `constraint`)
 - No `unwrap()` on user-controlled data; use proper error handling
