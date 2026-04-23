@@ -39,19 +39,23 @@ const BRANCH_PATTERN = /^[a-z0-9/_-]+$/;
  * Extract a named `## Section` from a markdown body.
  * Returns the content between the header and the next `## ` or end-of-string.
  * Returns `null` if the section doesn't exist.
+ *
+ * Uses line-by-line scanning (not regex) to avoid multiline `$` anchor bugs.
  */
 function extractSection(body: string, sectionName: string): string | null {
-  const regex = new RegExp(
-    `^## ${escapeRegExp(sectionName)}\\s*\\n([\\s\\S]*?)(?=\\n## |$)`,
-    "m",
+  const lines = body.split("\n");
+  const header = `## ${sectionName}`;
+  const idx = lines.findIndex(
+    (l) => l.trimEnd() === header || l.trimEnd().startsWith(`${header} `),
   );
-  const match = body.match(regex);
-  return match ? match[1] : null;
-}
+  if (idx === -1) return null;
 
-/** Escape special regex characters in a string. */
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const contentLines: string[] = [];
+  for (let i = idx + 1; i < lines.length; i++) {
+    if (lines[i].startsWith("## ")) break;
+    contentLines.push(lines[i]);
+  }
+  return contentLines.join("\n");
 }
 
 /**
