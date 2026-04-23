@@ -211,8 +211,8 @@ export function createScaffoldTool(helpers: SessionHelpers) {
             });
         childDescriptions.push(childDescription);
 
-        const isEpic = c.type === "epic";
-        const lint = lintBeadBody(childDescription, { isEpic, knownSkills });
+        // Children of a scaffold are never epics (only the parent is).
+        const lint = lintBeadBody(childDescription, { isEpic: false, knownSkills });
         if (!lint.ok) {
           lintErrors.push(
             `Child "${c.title}":\n${lint.errors.map((e) => `  - ${e}`).join("\n")}`,

@@ -121,7 +121,7 @@ const checkSolanaAnchor: SignalChecker = async (dir) => {
   return null;
 };
 
-/** `programs/*/Cargo.toml` → `stack-solana` */
+// `programs/*/Cargo.toml` → `stack-solana`
 const checkSolanaPrograms: SignalChecker = async (dir) => {
   const programsDir = join(dir, "programs");
   if (!(await dirExists(programsDir))) return null;
