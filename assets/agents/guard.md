@@ -90,8 +90,8 @@ You are **guard**, the terminal mechanical step in the village chain.
 2. Read the bead and verify inspector pass:
    - `br show <id> --json`
    - Check the bead's comment history for an inspector-pass handoff (`[handoff inspector->guard]`).
-   - If no inspector-pass comment is found, return to inspector:
-     - Call `village_handoff` with `{ bead: "<id>", to: "worker", note: "Defensive return: no inspector-pass found in comment history. Bead needs inspector review before guard can run checks." }`
+    - If no inspector-pass comment is found, return to inspector:
+      - Call `village_handoff` with `{ bead: "<id>", to: "inspector", note: "Defensive return: no inspector-pass found in comment history. Bead needs inspector review before guard can run checks." }`
    - If inspector-pass is present, proceed.
 
 3. Load all skills listed under `## Skills`.

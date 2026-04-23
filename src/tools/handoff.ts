@@ -10,8 +10,8 @@
  * **Allowed handoff matrix:**
  * - worker -> inspector (default after implementation)
  * - inspector -> guard (judgment passed) | worker (changes requested) | mayor (out of scope)
- * - guard -> worker (checks failed) | envoy (only if bead body explicitly requests release/PR)
- *   - guard does NOT hand off to inspector -- guard closes the bead itself on green
+ * - guard -> worker (checks failed) | inspector (defensive: no inspector-pass) | envoy (only if bead body explicitly requests release/PR)
+ *   - guard closes the bead itself on green (no handoff needed)
  * - mayor -> worker (rescope)
  * - envoy -> (none; envoy closes or returns to guard with comment)
  *
@@ -48,7 +48,7 @@ export const VILLAGE_ROLES: ReadonlySet<string> = new Set<VillageRole>([
  * |------------|-----------------------------|
  * | worker     | inspector                   |
  * | inspector  | guard, worker, mayor        |
- * | guard      | worker, envoy               |
+ * | guard      | worker, inspector, envoy    |
  * | mayor      | worker                      |
  * | envoy      | (none)                      |
  */
@@ -57,7 +57,7 @@ export const HANDOFF_MATRIX: Readonly<
 > = {
   worker: new Set(["inspector"]),
   inspector: new Set(["guard", "worker", "mayor"]),
-  guard: new Set(["worker", "envoy"]),
+  guard: new Set(["worker", "inspector", "envoy"]),
   mayor: new Set(["worker"]),
   envoy: new Set(),
 };
