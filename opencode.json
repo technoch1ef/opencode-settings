@@ -17,7 +17,11 @@
       "*": "allow"
     }
   },
-  "agent": {},
+  "agent": {
+    "github": {
+      "disable": true
+    }
+  },
   "instructions": [".opencode/github-rules.md"],
   "command": {
     "village:work": {
