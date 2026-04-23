@@ -27,6 +27,7 @@ npx @technoch1ef/opencode-village init --all
 | Command | Description |
 |---------|-------------|
 | `/village:work` | Trigger the work loop for the current agent's role |
+| `/village:board` | Show a read-only at-a-glance view of village state |
 | `/village:orphans` | Report and optionally fix unassigned beads |
 
 ## Tools
