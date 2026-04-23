@@ -10,6 +10,7 @@ import type { SessionHelpers } from "../lib/sessions";
 import {
   compareBrIssuesDeterministic,
   inferAssigneeFromText,
+  VALID_ASSIGNEES,
   type BrIssue,
 } from "../lib/shared";
 
@@ -76,7 +77,7 @@ export function createOrphansTool(helpers: SessionHelpers) {
       for (const issue of scannedNonEpic) {
         const a = (issue.assignee ?? "").trim();
         if (!a) orphans.push(issue);
-        else if (a !== "worker" && a !== "overseer") suspect.push(issue);
+        else if (!VALID_ASSIGNEES.has(a)) suspect.push(issue);
       }
 
       const ignoredEpicsUnassigned = ignoredEpics.filter(
@@ -84,7 +85,7 @@ export function createOrphansTool(helpers: SessionHelpers) {
       );
       const ignoredEpicsSuspect = ignoredEpics.filter((i) => {
         const a = (i.assignee ?? "").trim();
-        return a && a !== "worker" && a !== "overseer";
+        return a && !VALID_ASSIGNEES.has(a);
       });
 
       const limit = args.limit ?? 20;

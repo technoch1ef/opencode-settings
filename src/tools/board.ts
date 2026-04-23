@@ -13,7 +13,7 @@ import type { SessionHelpers } from "../lib/sessions";
 import type { BrIssue } from "../lib/shared";
 
 /** All village roles — used as board columns. */
-const BOARD_ROLES = ["mayor", "worker", "overseer", "guard", "inspector", "envoy"] as const;
+const BOARD_ROLES = ["mayor", "worker", "inspector", "guard", "envoy"] as const;
 
 /** Row categories for the board. */
 const BOARD_ROWS = ["ready", "in_progress", "blocked", "recently closed"] as const;

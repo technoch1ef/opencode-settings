@@ -22,7 +22,8 @@ export function createStatusTool(helpers: SessionHelpers) {
       return [
         `Root session: ${rootID}`,
         helpers.formatSessionList("Workers", sessions.workers),
-        helpers.formatSessionList("Overseers", sessions.overseers),
+        helpers.formatSessionList("Inspectors", sessions.inspectors),
+        helpers.formatSessionList("Guards", sessions.guards),
       ].join("\n");
     },
   });

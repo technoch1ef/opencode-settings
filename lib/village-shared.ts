@@ -7,11 +7,14 @@
 export {
   compareBrIssuesDeterministic,
   fixShellSnippetNewlines,
+  GUARD_WORK_LOOP_PROMPT,
   guardSingleInProgress,
   inferAssigneeFromText,
-  OVERSEER_WORK_LOOP_PROMPT,
+  INSPECTOR_WORK_LOOP_PROMPT,
   selectDeterministicReady,
+  VALID_ASSIGNEES,
   WORKER_WORK_LOOP_PROMPT,
   type BrIssue,
   type SingleInProgressGuardResult,
+  type VillageAssignee,
 } from "../src/lib/shared";

@@ -160,7 +160,7 @@ export function createScaffoldTool(helpers: SessionHelpers) {
               "chore",
             ] as const),
             priority: tool.schema.number().int().min(0).max(4),
-            assignee: tool.schema.enum(["worker", "overseer"] as const),
+            assignee: tool.schema.enum(["worker", "inspector", "guard"] as const),
             body: tool.schema.string().optional(),
           }),
         )
@@ -191,9 +191,13 @@ export function createScaffoldTool(helpers: SessionHelpers) {
 
       const children = args.children ?? [];
       for (const c of children) {
-        if (c.assignee !== "worker" && c.assignee !== "overseer") {
+        if (
+          c.assignee !== "worker" &&
+          c.assignee !== "inspector" &&
+          c.assignee !== "guard"
+        ) {
           throw new Error(
-            `Invalid child assignee: ${String(c.assignee)} (must be worker|overseer)`,
+            `Invalid child assignee: ${String(c.assignee)} (must be worker|inspector|guard)`,
           );
         }
       }

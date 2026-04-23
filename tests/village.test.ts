@@ -2,9 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import {
   fixShellSnippetNewlines,
+  GUARD_WORK_LOOP_PROMPT,
   guardSingleInProgress,
   inferAssigneeFromText,
-  OVERSEER_WORK_LOOP_PROMPT,
+  INSPECTOR_WORK_LOOP_PROMPT,
   selectDeterministicReady,
   WORKER_WORK_LOOP_PROMPT,
 } from "../src/lib/shared";
@@ -104,14 +105,31 @@ describe("guardSingleInProgress", () => {
 });
 
 describe("inferAssigneeFromText", () => {
-  test("routes review/check-like text to overseer", () => {
-    expect(inferAssigneeFromText("Please review this")).toBe("overseer");
-    expect(inferAssigneeFromText("Run checks and approve")).toBe("overseer");
-    expect(inferAssigneeFromText("Verification needed")).toBe("overseer");
+  test("routes review/inspect/scope-like text to inspector", () => {
+    expect(inferAssigneeFromText("Please review this")).toBe("inspector");
+    expect(inferAssigneeFromText("Inspect the diff for scope issues")).toBe(
+      "inspector",
+    );
+    expect(inferAssigneeFromText("Verify the acceptance criteria")).toBe(
+      "inspector",
+    );
+  });
+
+  test("routes test/lint/build/check-like text to guard", () => {
+    expect(inferAssigneeFromText("Run the test suite")).toBe("guard");
+    expect(inferAssigneeFromText("Lint and build the project")).toBe("guard");
+    expect(inferAssigneeFromText("Run typecheck")).toBe("guard");
   });
 
   test("defaults to worker", () => {
     expect(inferAssigneeFromText("Implement the feature")).toBe("worker");
+  });
+
+  test("inspector keywords take priority over guard keywords", () => {
+    // "review" (inspector) appears before "check" (guard)
+    expect(inferAssigneeFromText("Review and check the code")).toBe(
+      "inspector",
+    );
   });
 });
 
@@ -121,15 +139,22 @@ describe("work loop prompt invariants", () => {
     expect(WORKER_WORK_LOOP_PROMPT).not.toContain("br ready --assignee worker");
     expect(WORKER_WORK_LOOP_PROMPT).not.toContain("--status in_progress");
 
-    expect(OVERSEER_WORK_LOOP_PROMPT).toContain("village_claim");
-    expect(OVERSEER_WORK_LOOP_PROMPT).not.toContain("br ready --assignee overseer");
-    expect(OVERSEER_WORK_LOOP_PROMPT).not.toContain("--status in_progress");
+    expect(INSPECTOR_WORK_LOOP_PROMPT).toContain("village_claim");
+    expect(INSPECTOR_WORK_LOOP_PROMPT).not.toContain(
+      "br ready --assignee inspector",
+    );
+    expect(INSPECTOR_WORK_LOOP_PROMPT).not.toContain("--status in_progress");
+
+    expect(GUARD_WORK_LOOP_PROMPT).toContain("village_claim");
+    expect(GUARD_WORK_LOOP_PROMPT).not.toContain("br ready --assignee guard");
+    expect(GUARD_WORK_LOOP_PROMPT).not.toContain("--status in_progress");
   });
 
   test("worker prompt uses village_handoff instead of two-step", () => {
     expect(WORKER_WORK_LOOP_PROMPT).toContain("village_handoff");
     expect(WORKER_WORK_LOOP_PROMPT).not.toContain("br comments add");
     expect(WORKER_WORK_LOOP_PROMPT).not.toContain("--assignee overseer");
+    expect(WORKER_WORK_LOOP_PROMPT).not.toContain("--assignee inspector");
   });
 
   test("worker prompt references village_ensure_branch for branch management", () => {
@@ -137,5 +162,15 @@ describe("work loop prompt invariants", () => {
     expect(WORKER_WORK_LOOP_PROMPT).toContain("village_claim");
     // Step 4 should mention that village_claim handles branch setup.
     expect(WORKER_WORK_LOOP_PROMPT).toContain("placed you on the bead's branch");
+  });
+
+  test("inspector prompt references village_handoff to guard", () => {
+    expect(INSPECTOR_WORK_LOOP_PROMPT).toContain("village_handoff");
+    expect(INSPECTOR_WORK_LOOP_PROMPT).toContain("guard");
+  });
+
+  test("guard prompt can close beads on green checks", () => {
+    expect(GUARD_WORK_LOOP_PROMPT).toContain("br close");
+    expect(GUARD_WORK_LOOP_PROMPT).toContain("Approved");
   });
 });

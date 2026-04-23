@@ -28,3 +28,11 @@ description: TypeScript/Node repo conventions, common scripts, and verification 
 - Update types when changing runtime behavior
 - Keep imports consistent with existing lint rules
 - Avoid introducing new tooling unless requested
+
+## Review Checklist
+- Types match runtime behavior (no `any` casts or `as` escapes without justification)
+- Imports are consistent with existing lint rules (no unused imports, correct ordering)
+- No `console.log` / `console.debug` left in production code
+- No hardcoded secrets, URLs, or environment-specific values
+- Error handling is present (no silently swallowed errors)
+- New exports are added to barrel files if the project uses them

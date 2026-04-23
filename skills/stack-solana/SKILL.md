@@ -35,3 +35,12 @@ description: Solana (Anchor-first) Rust programs + TS client workflow, security 
 - CPI signer seeds: correct seeds/bump; no user-controlled seed injection
 - Close/realloc/rent: funds go to expected recipient; no data corruption
 - Logging: `msg!` does not print secrets
+
+## Review Checklist
+- Account validation constraints are present and correct (`has_one`, `seeds`, `bump`, `constraint`)
+- No `unwrap()` on user-controlled data; use proper error handling
+- Checked arithmetic for all token amounts and fees
+- CPI calls use correct signer seeds with no user-controlled seed injection
+- No hardcoded pubkeys or private keys in source
+- IDL changes are backward-compatible (no removed fields/instructions without migration)
+- Test coverage addresses the happy path and at least one error case

@@ -45,10 +45,46 @@ export function selectDeterministicReady(ready: BrIssue[]): BrIssue | null {
   return ready.slice().sort(compareBrIssuesDeterministic)[0] ?? null;
 }
 
-export function inferAssigneeFromText(text: string): "worker" | "overseer" {
+/** Valid non-epic assignee roles in the village. */
+export type VillageAssignee = "worker" | "inspector" | "guard";
+
+/** All valid non-epic assignee names. */
+export const VALID_ASSIGNEES: ReadonlySet<string> = new Set<VillageAssignee>([
+  "worker",
+  "inspector",
+  "guard",
+]);
+
+/**
+ * Infer the appropriate assignee for an orphaned bead based on its text content.
+ *
+ * - keywords `review|verify|inspect|scope` → `inspector`
+ * - keywords `test|lint|build|check` → `guard`
+ * - default → `worker`
+ */
+export function inferAssigneeFromText(text: string): VillageAssignee {
   const t = text.toLowerCase();
-  const keywords = ["review", "verify", "verification", "check", "checks", "overseer", "approve"];
-  return keywords.some((k) => t.includes(k)) ? "overseer" : "worker";
+  const inspectorKeywords = [
+    "review",
+    "verify",
+    "inspect",
+    "scope",
+    "inspector",
+    "judgment",
+    "approve",
+  ];
+  const guardKeywords = [
+    "test",
+    "lint",
+    "build",
+    "check",
+    "guard",
+    "typecheck",
+    "ci",
+  ];
+  if (inspectorKeywords.some((k) => t.includes(k))) return "inspector";
+  if (guardKeywords.some((k) => t.includes(k))) return "guard";
+  return "worker";
 }
 
 export function fixShellSnippetNewlines(text: unknown): unknown {
@@ -93,16 +129,37 @@ Use this workflow:
    - Call \`village_handoff\` with \`{ bead: "<id>", to: "inspector", note: "Implementation complete. Ready for review." }\`
 8. Repeat from step 1.`;
 
-export const OVERSEER_WORK_LOOP_PROMPT = `Claim the next bead assigned to overseer and start reviewing it.
+export const INSPECTOR_WORK_LOOP_PROMPT = `Claim the next bead assigned to inspector and start reviewing it.
 
 Use this workflow:
 1. Claim deterministically by calling \`village_claim\` (single in_progress guard):
    - \`existing in_progress: <id> | ...\` => continue that bead
    - \`claimed: <id> | ...\` => start that bead
-   - \`no ready beads for overseer\` => report that and wait
+   - \`no ready beads for inspector\` => report that and wait
+2. Read the bead details: \`br show <id> --json\`
+3. Load skills listed under \`## Skills\`
+4. Gather the diff: \`git diff $(git merge-base HEAD main)..HEAD\`
+5. Run the judgment checklist:
+   - AC coverage: parse \`- [ ]\` items, verify each is addressed by the diff
+   - Diff scope: flag files changed outside expected scope
+   - Regression sniff: deleted tests, \`TODO\`/\`console.log\`, \`any\` casts, hardcoded secrets
+   - Stack review: apply each \`stack-*\` skill's \`## Review Checklist\`
+6. If judgment passes:
+   - Call \`village_handoff\` with \`{ bead: "<id>", to: "guard", note: "<structured summary>" }\`
+7. If changes needed:
+   - Call \`village_handoff\` with \`{ bead: "<id>", to: "worker", note: "<itemized findings>" }\`
+8. Repeat from step 1.`;
+
+export const GUARD_WORK_LOOP_PROMPT = `Claim the next bead assigned to guard and start running checks.
+
+Use this workflow:
+1. Claim deterministically by calling \`village_claim\` (single in_progress guard):
+   - \`existing in_progress: <id> | ...\` => continue that bead
+   - \`claimed: <id> | ...\` => start that bead
+   - \`no ready beads for guard\` => report that and wait
 2. Read the bead details: \`br show <id> --json\`
 3. Load skills listed under \`## Skills\` and run the appropriate checks (tests/linters/build)
-4. If approved:
+4. If all checks pass:
    - \`br comments add <id> "Approved. Checks: <...>"\`
    - \`br close <id> --reason "Approved"\`
    - post-close parent epic check:
@@ -110,7 +167,6 @@ Use this workflow:
      - \`if [ -n "$PARENT_ID" ]; then br children "$PARENT_ID" --json; fi\`
      - \`if [ -n "$PARENT_ID" ]; then OPEN_CHILD_COUNT=$(br children "$PARENT_ID" --json | jq '[.[] | select(.status != "closed")] | length'); fi\`
      - \`if [ -n "$PARENT_ID" ] && [ "$OPEN_CHILD_COUNT" -eq 0 ]; then br close "$PARENT_ID" --reason "All child beads closed"; fi\`
-5. If changes needed:
-   - \`br comments add <id> "Changes requested: <actionable bullets>"\`
-   - \`br update <id> --assignee worker --status open\`
+5. If checks fail:
+   - Call \`village_handoff\` with \`{ bead: "<id>", to: "worker", note: "Checks failed: <actionable bullets>" }\`
 6. Repeat from step 1.`;

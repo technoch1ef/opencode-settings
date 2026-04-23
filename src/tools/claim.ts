@@ -85,9 +85,11 @@ async function maybeEnsureBranch(
 export function createClaimTool(helpers: SessionHelpers) {
   return tool({
     description:
-      "Deterministically claim the next ready bead for worker/overseer, enforcing a single in_progress bead per assignee.",
+      "Deterministically claim the next ready bead for worker/inspector/guard, enforcing a single in_progress bead per assignee.",
     args: {
-      assignee: tool.schema.enum(["worker", "overseer"] as const).optional(),
+      assignee: tool.schema
+        .enum(["worker", "inspector", "guard"] as const)
+        .optional(),
       directory: tool.schema.string().optional(),
     },
     async execute(args, context) {
@@ -98,12 +100,18 @@ export function createClaimTool(helpers: SessionHelpers) {
 
       const assignee =
         args.assignee ??
-        (sessionAgent === "worker" || sessionAgent === "overseer"
+        (sessionAgent === "worker" ||
+        sessionAgent === "inspector" ||
+        sessionAgent === "guard"
           ? sessionAgent
           : undefined);
-      if (assignee !== "worker" && assignee !== "overseer") {
+      if (
+        assignee !== "worker" &&
+        assignee !== "inspector" &&
+        assignee !== "guard"
+      ) {
         throw new Error(
-          `village_claim requires assignee=worker|overseer (session agent: ${sessionAgent ?? "unknown"})`,
+          `village_claim requires assignee=worker|inspector|guard (session agent: ${sessionAgent ?? "unknown"})`,
         );
       }
 

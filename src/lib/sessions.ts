@@ -13,11 +13,13 @@ export type SessionSummary = {
   title: string;
 };
 
-/** Check if a session title matches the village worker/overseer naming convention. */
+/** Check if a session title matches a village role naming convention. */
 export function isVillageSessionTitle(title: unknown): title is string {
   return (
     typeof title === "string" &&
-    (title.startsWith("village-worker-") || title.startsWith("village-overseer"))
+    (title.startsWith("village-worker-") ||
+      title.startsWith("village-inspector") ||
+      title.startsWith("village-guard"))
   );
 }
 
@@ -35,7 +37,8 @@ export interface SessionHelpers {
   getRootSessionID(sessionID: string): Promise<string>;
   listVillageSessions(rootID: string): Promise<{
     workers: SessionSummary[];
-    overseers: SessionSummary[];
+    inspectors: SessionSummary[];
+    guards: SessionSummary[];
   }>;
   formatSessionList(label: string, sessions: SessionSummary[]): string;
   resolveActor(sessionID: string): Promise<string | undefined>;
@@ -116,7 +119,8 @@ export function createSessionHelpers(
 
   async function listVillageSessions(rootID: string): Promise<{
     workers: SessionSummary[];
-    overseers: SessionSummary[];
+    inspectors: SessionSummary[];
+    guards: SessionSummary[];
   }> {
     const childrenRes = await client.session.children({
       path: { id: rootID },
@@ -132,16 +136,25 @@ export function createSessionHelpers(
       .map((s) => ({ id: String(s.id), title: String(s.title) }))
       .filter((s) => s.id);
 
-    const overseers = children
+    const inspectors = children
       .filter(
         (s) =>
           typeof s?.title === "string" &&
-          s.title.startsWith("village-overseer"),
+          s.title.startsWith("village-inspector"),
       )
       .map((s) => ({ id: String(s.id), title: String(s.title) }))
       .filter((s) => s.id);
 
-    return { workers, overseers };
+    const guards = children
+      .filter(
+        (s) =>
+          typeof s?.title === "string" &&
+          s.title.startsWith("village-guard"),
+      )
+      .map((s) => ({ id: String(s.id), title: String(s.title) }))
+      .filter((s) => s.id);
+
+    return { workers, inspectors, guards };
   }
 
   function formatSessionList(
