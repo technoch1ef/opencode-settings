@@ -3,7 +3,7 @@
   "type": "module",
   "dependencies": {
     "@opencode-ai/plugin": "1.14.20",
-    "@technoch1ef/opencode-beads-rust": "/Users/oleksandrovcharov/Repositories/opencode-beads-rust/technoch1ef-opencode-beads-rust-0.1.0.tgz",
-    "@technoch1ef/opencode-village": "/Users/oleksandrovcharov/Repositories/opencode-village/technoch1ef-opencode-village-0.1.0.tgz"
+    "@technoch1ef/opencode-beads-rust": "^0.1.0",
+    "@technoch1ef/opencode-village": "^0.1.0"
   }
 }
