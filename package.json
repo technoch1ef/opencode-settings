@@ -24,7 +24,7 @@
     "opencode-village": "./dist/bin/init.js"
   },
   "scripts": {
-    "build": "tsc && tsc -p tsconfig.bin.json",
+    "build": "bun run scripts/build.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test"
   },
