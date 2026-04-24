@@ -1,11 +1,17 @@
 # @technoch1ef/opencode-village
 
-An OpenCode plugin that adds a role-driven "Agentic Village" workflow backed by [Beads](https://github.com/Dicklesworthstone/beads_rust) for AI-native issue tracking. Agents claim, implement, review, and verify work through a structured handoff chain.
+Role-driven "Agentic Village" workflow for [OpenCode](https://opencode.ai) — agents claim, implement, review, and verify work through a structured handoff chain backed by [Beads](https://github.com/Dicklesworthstone/beads_rust) for AI-native issue tracking.
+
+## Requirements
+
+- [`br` binary](https://github.com/Dicklesworthstone/beads_rust) on `PATH` (Beads CLI)
+- [`@technoch1ef/opencode-beads-rust`](https://www.npmjs.com/package/@technoch1ef/opencode-beads-rust) plugin installed in OpenCode
+- Node >= 20
 
 ## Install
 
 ```bash
-npm install @technoch1ef/opencode-village
+npm i -D @technoch1ef/opencode-village @technoch1ef/opencode-beads-rust
 npx @technoch1ef/opencode-village init --all
 # Restart OpenCode
 ```
@@ -69,12 +75,16 @@ Agents are installed to `~/.config/opencode/agents/`. Edit any agent's markdown 
 
 ## Smoke test
 
-1. Start with a fresh `~/.config/opencode` (back up existing config if needed)
-2. Run `npx @technoch1ef/opencode-village init --all`
-3. Start OpenCode
-4. Verify the mayor agent loads as the default agent
-5. Run `/village:work` in a worker session to confirm the work loop starts
+1. Install the packages and run `init`:
+   ```bash
+   npm i -D @technoch1ef/opencode-village @technoch1ef/opencode-beads-rust
+   npx @technoch1ef/opencode-village init --all
+   ```
+2. Start OpenCode
+3. Verify the mayor agent loads as the default agent
+4. Open a worker session and run `/village:work` to confirm the work loop starts
+5. Open a second terminal and run `br ready` to verify Beads is on `PATH` and detecting the repo
 
 ## License
 
-MIT
+MIT — see [LICENSE](./LICENSE)
