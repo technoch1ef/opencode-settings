@@ -2,27 +2,29 @@
 
 This repository is the global OpenCode configuration at `~/.config/opencode`.
 
-It sets up an **Agentic Village** workflow (mayor/worker/overseer) backed by **Beads** (`.beads/`) for AI-native issue tracking.
+It sets up an **Agentic Village** workflow (mayor/worker/inspector/guard/envoy) backed by **Beads** (`.beads/`) for AI-native issue tracking.
+
+Village workflow comes from [`@technoch1ef/opencode-village`](https://github.com/technoch1ef/opencode-village) (npm).
+To customize, edit installed assets under `~/.config/opencode/{agents,commands,skills}/` after `init`.
 
 If you were dropped into a new/compacted session, run `br prime` to recover Beads context.
 
 ## What Lives Where
 
-- Agents (role prompts + constraints): `agents/mayor.md`, `agents/worker.md`, `agents/overseer.md`
-- Village plugin (claim/scaffold tools + event handlers): `plugins/village.ts`
 - OpenCode config entrypoint: `opencode.json`
-- Slash commands (e.g. `/village:work`): `commands/`
-- Public skills: `skills/*/SKILL.md`
+- Agents (role prompts, installed from village plugin): `agents/`
+- Slash commands (installed from village plugin): `commands/`
+- Public skills (installed from village plugin): `skills/*/SKILL.md`
 - Private, local-only skills (gitignored): `skills-private/*/SKILL.md`
 - Themes and misc tooling: `themes/`, `tools/`
 
 ## Village Model
 
 - `mayor`: clarifies scope, researches, creates beads (epic + child tasks)
-- `worker`: implements exactly what a bead asks for, makes local commits, hands off to overseer (no tests, no pushes)
-- `overseer`: reviews, runs checks (tests/linters/build), closes beads or returns them with actionable feedback (no edits, no pushes)
-
-Reference: `VILLAGE.md`.
+- `worker`: implements exactly what a bead asks for, makes local commits, hands off to inspector (no tests, no pushes)
+- `inspector`: read-only judgment — AC coverage, scope check, regression sniff
+- `guard`: runs checks (tests/linters/build), closes beads or returns them with actionable feedback (no edits, no pushes)
+- `envoy`: pushes, creates PRs, handles releases (optional terminal step)
 
 ## Beads Rules 
 
