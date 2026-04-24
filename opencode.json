@@ -1,7 +1,11 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "default_agent": "mayor",
-  "plugin": ["@mohak34/opencode-notifier@latest", "opencode-beads"],
+  "plugin": [
+    "@mohak34/opencode-notifier@latest",
+    "@technoch1ef/opencode-beads-rust",
+    "@technoch1ef/opencode-village"
+  ],
   "skills": {
     "paths": ["{env:HOME}/.config/opencode/skills-private"]
   },

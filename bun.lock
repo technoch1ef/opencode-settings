@@ -4,16 +4,15 @@
   "workspaces": {
     "": {
       "dependencies": {
-        "@opencode-ai/plugin": "1.4.6",
+        "@opencode-ai/plugin": "1.14.20",
       },
       "devDependencies": {
+        "@technoch1ef/opencode-village": "/Users/oleksandrovcharov/Repositories/opencode-village/technoch1ef-opencode-village-0.1.0.tgz",
+        "@technoch1ef/opencode-beads-rust": "/Users/oleksandrovcharov/Repositories/opencode-beads-rust/technoch1ef-opencode-beads-rust-0.1.0.tgz",
         "bun-types": "latest",
         "detect-terminal": "2.0.0",
         "node-notifier": "10.0.1",
         "typescript": "^5.8.0",
-      },
-      "peerDependencies": {
-        "@opencode-ai/plugin": ">=1.4.0",
       },
     },
   },
@@ -30,11 +29,15 @@
 
     "@msgpackr-extract/msgpackr-extract-win32-x64": ["@msgpackr-extract/msgpackr-extract-win32-x64@3.0.3", "", { "os": "win32", "cpu": "x64" }, "sha512-x0fWaQtYp4E6sktbsdAqnehxDgEc/VwM7uLsRCYWaiGu0ykYdZPiS8zCWdnjHwyiumousxfBm4SO31eXqwEZhQ=="],
 
-    "@opencode-ai/plugin": ["@opencode-ai/plugin@1.4.6", "", { "dependencies": { "@opencode-ai/sdk": "1.4.6", "effect": "4.0.0-beta.48", "zod": "4.1.8" }, "peerDependencies": { "@opentui/core": ">=0.1.99", "@opentui/solid": ">=0.1.99" }, "optionalPeers": ["@opentui/core", "@opentui/solid"] }, "sha512-w+55uE4tCpFoK+MtWeGoPDmpuuabw8m5WVpmucIKoTO5SgD/3EwXVPBqAh44iS72ve1Eu+uhhzeVQ070x9bVjg=="],
+    "@opencode-ai/plugin": ["@opencode-ai/plugin@1.14.20", "", { "dependencies": { "@opencode-ai/sdk": "1.14.20", "effect": "4.0.0-beta.48", "zod": "4.1.8" }, "peerDependencies": { "@opentui/core": ">=0.1.99", "@opentui/solid": ">=0.1.99" }, "optionalPeers": ["@opentui/core", "@opentui/solid"] }, "sha512-txRfm6Y2DBqFxJtgo63vj5//d7TJS7/angWELUEQcsSK0llfvmVp60gox4e8zIwpGjDcDP9A4qO6oNe++pockg=="],
 
-    "@opencode-ai/sdk": ["@opencode-ai/sdk@1.4.6", "", { "dependencies": { "cross-spawn": "7.0.6" } }, "sha512-sQaVfEfQW3m3DeCVlurSTUjgIYdIk+gIfOys51MVFYzJHw+FyjjuAt7EKKA+LeZU5AiWGlpkIRa1rJo5KWMXCw=="],
+    "@opencode-ai/sdk": ["@opencode-ai/sdk@1.14.20", "", { "dependencies": { "cross-spawn": "7.0.6" } }, "sha512-kPZP1An1ZdWOfLfDYhNjh665HX4RcI8au6Lzjn0FktoQ3RpWHq1WXRLHrJO8rJqwWvQDOzS48cXt9jbr+uwQiA=="],
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
+
+    "@technoch1ef/opencode-beads-rust": ["@technoch1ef/opencode-beads-rust@/Users/oleksandrovcharov/Repositories/opencode-beads-rust/technoch1ef-opencode-beads-rust-0.1.0.tgz", { "peerDependencies": { "@opencode-ai/plugin": ">=1.14" } }],
+
+    "@technoch1ef/opencode-village": ["@technoch1ef/opencode-village@/Users/oleksandrovcharov/Repositories/opencode-village/technoch1ef-opencode-village-0.1.0.tgz", { "peerDependencies": { "@opencode-ai/plugin": ">=1.14", "@technoch1ef/opencode-beads-rust": ">=0.1.0" }, "optionalPeers": ["@technoch1ef/opencode-beads-rust"], "bin": { "opencode-village": "./dist/bin/init.js" } }],
 
     "@types/node": ["@types/node@25.6.0", "", { "dependencies": { "undici-types": "~7.19.0" } }, "sha512-+qIYRKdNYJwY3vRCZMdJbPLJAtGjQBudzZzdzwQYkEPQd+PJGixUL5QfvCLDaULoLv+RhT3LDkwEfKaAkgSmNQ=="],
 
