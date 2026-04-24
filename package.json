@@ -1,61 +1,9 @@
 {
-  "name": "@technoch1ef/opencode-village",
-  "version": "0.1.0",
-  "description": "Agentic Village plugin for OpenCode — role-driven workflow with beads-based task tracking",
+  "private": true,
   "type": "module",
-  "main": "./dist/plugin.js",
-  "types": "./dist/plugin.d.ts",
-  "exports": {
-    ".": {
-      "import": "./dist/plugin.js",
-      "types": "./dist/plugin.d.ts"
-    },
-    "./lib/shared": {
-      "import": "./dist/lib/shared.js",
-      "types": "./dist/lib/shared.d.ts"
-    },
-    "./assets/*": "./assets/*"
-  },
-  "files": [
-    "dist",
-    "assets"
-  ],
-  "bin": {
-    "opencode-village": "./dist/bin/init.js"
-  },
-  "scripts": {
-    "build": "bun run scripts/build.ts",
-    "typecheck": "tsc --noEmit",
-    "test": "bun test"
-  },
   "dependencies": {
-    "@opencode-ai/plugin": "1.14.20"
-  },
-  "devDependencies": {
+    "@opencode-ai/plugin": "1.14.20",
     "@technoch1ef/opencode-beads-rust": "/Users/oleksandrovcharov/Repositories/opencode-beads-rust/technoch1ef-opencode-beads-rust-0.1.0.tgz",
-    "@technoch1ef/opencode-village": "/Users/oleksandrovcharov/Repositories/opencode-village/technoch1ef-opencode-village-0.1.0.tgz",
-    "bun-types": "latest",
-    "detect-terminal": "2.0.0",
-    "node-notifier": "10.0.1",
-    "typescript": "^5.8.0"
-  },
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/technoch1ef/opencode-village.git"
-  },
-  "keywords": [
-    "opencode",
-    "plugin",
-    "agentic",
-    "village",
-    "beads",
-    "workflow"
-  ],
-  "engines": {
-    "node": ">=20"
-  },
-  "publishConfig": {
-    "access": "public"
+    "@technoch1ef/opencode-village": "/Users/oleksandrovcharov/Repositories/opencode-village/technoch1ef-opencode-village-0.1.0.tgz"
   }
 }
