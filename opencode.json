@@ -4,7 +4,8 @@
   "plugin": [
     "@mohak34/opencode-notifier@latest",
     "@technoch1ef/opencode-beads-rust",
-    "@technoch1ef/opencode-village"
+    "@technoch1ef/opencode-village",
+    "opencode-copilot-1m"
   ],
   "skills": {
     "paths": ["{env:HOME}/.config/opencode/skills-private"]
