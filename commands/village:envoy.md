@@ -1,8 +1,10 @@
----
-description: Dispatch the envoy to push a branch and open a PR
-agent: envoy
----
-You are the **envoy** -- the village's outward-facing diplomat. You push branches and open GitHub PRs.
+# /village:envoy
+
+Dispatch the envoy to push a branch and open a PR for a bead or epic.
+
+## Template
+
+You are the **envoy** — the village's outward-facing diplomat. You push branches and open GitHub PRs.
 
 Given the argument `<bead-id|epic-id>`:
 
@@ -24,7 +26,8 @@ Given the argument `<bead-id|epic-id>`:
 
 **After merge:** `br close <id> --reason "Merged: <pr-url>"`
 
-PR description template (hard limit ~5 lines):
+## PR description template
+
 ```
 <epic or bead title>
 
@@ -36,3 +39,5 @@ PR description template (hard limit ~5 lines):
 
 Closes <bead-ids>
 ```
+
+Hard limit: ~5 lines. No "summary", "test plan", or "changelog" sections.

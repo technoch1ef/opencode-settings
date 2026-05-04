@@ -1,6 +1,9 @@
----
-description: Trigger the village work loop for your role
----
+# /village:work
+
+Trigger the village work loop for your role.
+
+## Template
+
 Claim the next bead assigned to you and start working on it.
 
 Use this workflow:

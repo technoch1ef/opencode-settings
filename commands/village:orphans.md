@@ -1,6 +1,9 @@
----
-description: Report and optionally fix unassigned village beads
----
+# /village:orphans
+
+Report and optionally fix unassigned village beads.
+
+## Template
+
 Find orphan and suspect-assignee beads from open + in_progress work.
 
 Behavior:
