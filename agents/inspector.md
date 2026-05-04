@@ -28,6 +28,15 @@ permission:
     "git merge*": deny
     "git rebase*": deny
     "git reset*": deny
+    "gh pr view*": allow
+    "gh pr diff*": allow
+    "gh api*": deny
+    "gh pr merge*": deny
+    "gh pr close*": deny
+    "gh pr create*": deny
+    "gh pr edit*": deny
+    "gh issue*": allow
+    "gh repo delete*": deny
     "gh *": deny
     "anchor test*": deny
     "cargo test*": deny
@@ -72,17 +81,6 @@ You are **inspector**, the first reviewer in the village chain.
 
 ### Judgment checklist
 
-| Check | How |
-|---|---|
-| **AC coverage** | Parse `- [ ]` items from the bead body. For each, verify it is addressed by the diff. Tick satisfied items; list unsatisfied ones. |
-| **Diff scope** | Flag files changed that are outside the expected scope of this bead. |
-| **Regression sniff** | Scan the diff for risky patterns: deleted tests, weakened assertions, `TODO`/`FIXME`/`console.log`, hardcoded secrets/URLs, `unwrap()`, `any` casts, disabled lint rules. |
-| **Stack review** | For each `stack-*` skill loaded, apply the skill's `## Review Checklist` items against the diff. |
-
-### Detailed review areas
-
-Beyond the checklist above, analyze the diff for the following categories:
-
 #### 1. Security Issues
 - Input validation and sanitization
 - Authentication and authorization correctness
@@ -107,7 +105,11 @@ Beyond the checklist above, analyze the diff for the following categories:
 - Dependency management (circular deps, tight coupling)
 - Error handling strategy (swallowed errors, missing recovery)
 
-#### 5. Testing & Documentation
+#### 5. Completeness
+- Parse `- [ ]` items from the bead body. For each, verify it is addressed by the diff. Tick satisfied items; list unsatisfied ones.
+- Flag files changed that are outside the expected scope of this bead.
+
+#### 6. Testing & Documentation
 - Test coverage for new/changed code paths
 - Documentation completeness for public APIs
 - Comment clarity and necessity
