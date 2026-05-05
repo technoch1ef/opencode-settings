@@ -8,6 +8,10 @@ opencode-notifier-state.json
 opencode.local.json
 opencode.backup.json
 
+# Slack MCP cache
+slack_mcp_users_cache.json
+slack_mcp_channels_cache.json
+
 # bv (beads viewer) local config and caches
 .bv/
 .beads/
