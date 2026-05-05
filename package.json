@@ -6,6 +6,6 @@
     "@technoch1ef/opencode-beads-rust": "^0.1.0"
   },
   "devDependencies": {
-    "@technoch1ef/opencode-village": "^0.3.1"
+    "@technoch1ef/opencode-village": "^0.4.0"
   }
 }
