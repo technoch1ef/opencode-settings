@@ -2,10 +2,10 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@opencode-ai/plugin": "1.14.20",
-    "@technoch1ef/opencode-beads-rust": "^0.1.0"
+    "@opencode-ai/plugin": "1.14.20"
   },
   "devDependencies": {
-    "@technoch1ef/opencode-village": "^0.5.0"
+    "@technoch1ef/opencode-beads-rust": "^0.1.0",
+    "@technoch1ef/opencode-village": "^0.6.1"
   }
 }
