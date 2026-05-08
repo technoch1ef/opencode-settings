@@ -2,7 +2,7 @@
 
 This repository is the global OpenCode configuration at `~/.config/opencode`.
 
-It sets up an **Agentic Village** workflow (mayor/worker/inspector/guard/envoy) backed by **Beads** (`.beads/`) for AI-native issue tracking.
+It sets up an **Agentic Village** workflow (mayor/worker/guard/inspector/envoy) backed by **Beads** (`.beads/`) for AI-native issue tracking.
 
 Village workflow comes from [`@technoch1ef/opencode-village`](https://github.com/technoch1ef/opencode-village) (npm).
 To customize, edit installed assets under `~/.config/opencode/{agents,commands,skills}/` after `init`.
@@ -22,8 +22,8 @@ If you were dropped into a new/compacted session, run `br prime` to recover Bead
 
 - `mayor`: clarifies scope, researches, creates beads (epic + child tasks)
 - `worker`: implements exactly what a bead asks for, makes local commits, hands off to inspector (no tests, no pushes)
-- `inspector`: read-only judgment — AC coverage, scope check, regression sniff
 - `guard`: runs checks (tests/linters/build), closes beads or returns them with actionable feedback (no edits, no pushes)
+- `inspector`: read-only judgment — AC coverage, scope check, regression sniff
 - `envoy`: pushes, creates PRs, handles releases (optional terminal step)
 
 ## Beads Rules 
