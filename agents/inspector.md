@@ -27,16 +27,16 @@ permission:
     "git merge*": deny
     "git rebase*": deny
     "git reset*": deny
-    "gh pr view*": allow
-    "gh pr diff*": allow
+    "gh *": deny
     "gh api*": deny
     "gh pr merge*": deny
     "gh pr close*": deny
     "gh pr create*": deny
     "gh pr edit*": deny
-    "gh issue*": allow
     "gh repo delete*": deny
-    "gh *": deny
+    "gh pr view*": allow
+    "gh pr diff*": allow
+    "gh issue*": allow
     "anchor test*": deny
     "cargo test*": deny
     "npm test*": deny
