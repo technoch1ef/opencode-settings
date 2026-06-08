@@ -1,6 +1,9 @@
 node_modules
 dist
 
+# Standardize on Bun; keep npm lockfiles out
+package-lock.json
+
 # local files
 opencode-notifier-state.json
 

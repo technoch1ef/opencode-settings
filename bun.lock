@@ -5,8 +5,10 @@
     "": {
       "dependencies": {
         "@opencode-ai/plugin": "1.14.20",
-        "@technoch1ef/opencode-beads-rust": "/Users/oleksandrovcharov/Repositories/opencode-beads-rust/technoch1ef-opencode-beads-rust-0.1.0.tgz",
-        "@technoch1ef/opencode-village": "/Users/oleksandrovcharov/Repositories/opencode-village/technoch1ef-opencode-village-0.1.0.tgz",
+      },
+      "devDependencies": {
+        "@technoch1ef/opencode-beads-rust": "^0.1.0",
+        "@technoch1ef/opencode-village": "^0.6.4",
       },
     },
   },
@@ -29,9 +31,9 @@
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 
-    "@technoch1ef/opencode-beads-rust": ["@technoch1ef/opencode-beads-rust@/Users/oleksandrovcharov/Repositories/opencode-beads-rust/technoch1ef-opencode-beads-rust-0.1.0.tgz", { "peerDependencies": { "@opencode-ai/plugin": ">=1.14" } }],
+    "@technoch1ef/opencode-beads-rust": ["@technoch1ef/opencode-beads-rust@0.1.0", "", { "peerDependencies": { "@opencode-ai/plugin": ">=1.14" } }, "sha512-h7RZVQQ/oZl6/yGOTUsdk5Oub0oia46PhItrUoTe4T4T1a99kNxj+MuvQC5Is63mFkL7qftqhxbdJbqfUjEnnQ=="],
 
-    "@technoch1ef/opencode-village": ["@technoch1ef/opencode-village@/Users/oleksandrovcharov/Repositories/opencode-village/technoch1ef-opencode-village-0.1.0.tgz", { "peerDependencies": { "@opencode-ai/plugin": ">=1.14", "@technoch1ef/opencode-beads-rust": ">=0.1.0" }, "optionalPeers": ["@technoch1ef/opencode-beads-rust"], "bin": { "opencode-village": "./dist/bin/init.js" } }],
+    "@technoch1ef/opencode-village": ["@technoch1ef/opencode-village@0.6.4", "", { "peerDependencies": { "@opencode-ai/plugin": ">=1.14", "@technoch1ef/opencode-beads-rust": ">=0.1.0" }, "optionalPeers": ["@technoch1ef/opencode-beads-rust"], "bin": { "opencode-village": "dist/bin/init.js" } }, "sha512-Y5oLlRq0w9zt3xSmWL919Cf8wQcgO6nYdO4qQqpYaU09MPDTivGoOWvUUAt3UTBi6OMGZ04kx0XjEDqJopsXgg=="],
 
     "cross-spawn": ["cross-spawn@7.0.6", "", { "dependencies": { "path-key": "^3.1.0", "shebang-command": "^2.0.0", "which": "^2.0.1" } }, "sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA=="],
 
