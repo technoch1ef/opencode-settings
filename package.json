@@ -3,7 +3,7 @@
   "type": "module",
   "packageManager": "bun@1.3.9",
   "dependencies": {
-    "@opencode-ai/plugin": "1.14.20"
+    "@opencode-ai/plugin": "1.15.13"
   },
   "devDependencies": {
     "@technoch1ef/opencode-beads-rust": "^0.1.0",

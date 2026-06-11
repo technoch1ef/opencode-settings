@@ -5,7 +5,8 @@
     "@mohak34/opencode-notifier@latest",
     "@technoch1ef/opencode-beads-rust",
     "@technoch1ef/opencode-village@0.6.4",
-    "opencode-copilot-1m"
+    "opencode-copilot-1m",
+    "opencode-with-claude"
   ],
   "skills": {
     "paths": ["{env:HOME}/.config/opencode/skills-private"]
@@ -20,6 +21,14 @@
     },
     "skill": {
       "*": "allow"
+    }
+  },
+  "provider": {
+    "anthropic": {
+      "options": {
+        "baseURL": "http://127.0.0.1:3456",
+        "apiKey": "dummy-api-key"
+      }
     }
   },
   "agent": {
