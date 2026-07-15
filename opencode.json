@@ -3,13 +3,21 @@
   "default_agent": "mayor",
   "plugin": [
     "@mohak34/opencode-notifier@latest",
-    "@technoch1ef/opencode-beads-rust",
-    "@technoch1ef/opencode-village@0.6.5",
+    [
+      "@technoch1ef/opencode-beads-rust@0.2.0",
+      { "inject": ["mayor", "worker", "guard", "inspector", "envoy"] }
+    ],
+    "@technoch1ef/opencode-village@0.7.0",
     "opencode-copilot-1m",
     // "opencode-with-claude"
   ],
   "skills": {
     "paths": ["{env:HOME}/.config/opencode/skills-private"]
+  },
+  // Village tools are hidden by default; re-enabled per-agent in
+  // agents/{mayor,worker,guard,inspector,envoy}.md frontmatter.
+  "tools": {
+    "village_*": false
   },
   "permission": {
     "bash": {
@@ -20,7 +28,8 @@
       "br show*": "allow"
     },
     "skill": {
-      "*": "allow"
+      "*": "allow",
+      "village-workflow": "deny"
     }
   },
   "provider": {

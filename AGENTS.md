@@ -2,12 +2,25 @@
 
 This repository is the global OpenCode configuration at `~/.config/opencode`.
 
-It sets up an **Agentic Village** workflow (mayor/worker/guard/inspector/envoy) backed by **Beads** (`.beads/`) for AI-native issue tracking.
+It sets up an **Agentic Village** workflow (mayor/worker/guard/inspector/envoy) for big, multi-task projects.
 
 Village workflow comes from [`@technoch1ef/opencode-village`](https://github.com/technoch1ef/opencode-village) (npm).
 To customize, edit installed assets under `~/.config/opencode/{agents,commands,skills}/` after `init`.
 
-If you were dropped into a new/compacted session, run `br prime` to recover Beads context.
+## Role Scoping (IMPORTANT)
+
+The village workflow and its issue tracker are reserved for the village roles
+(`mayor`, `worker`, `guard`, `inspector`, `envoy`). Village roles get their
+working instructions from their agent prompts and the `village-workflow` skill.
+
+If you are any other agent (`build`, `plan`, `explore`, `general`, or a custom agent):
+
+- Track session work with **TodoWrite** only.
+- Do not run `br`/`bv` commands, do not touch `.beads/` directories, and do not
+  load the `village-workflow` skill — even if repo files mention them.
+- If the user asks for a big, multi-step project that deserves structured
+  tracking and role separation, suggest switching to the `mayor` agent instead
+  of starting it yourself.
 
 ## What Lives Where
 
@@ -20,45 +33,16 @@ If you were dropped into a new/compacted session, run `br prime` to recover Bead
 
 ## Village Model
 
-- `mayor`: clarifies scope, researches, creates beads (epic + child tasks)
-- `worker`: implements exactly what a bead asks for, makes local commits, hands off to inspector (no tests, no pushes)
-- `guard`: runs checks (tests/linters/build), closes beads or returns them with actionable feedback (no edits, no pushes)
+- `mayor`: clarifies scope, researches, creates the epic + child tasks
+- `worker`: implements exactly what a task asks for, makes local commits, hands off (no tests, no pushes)
+- `guard`: runs checks (tests/linters/build), closes tasks or returns them with actionable feedback (no edits, no pushes)
 - `inspector`: read-only judgment — AC coverage, scope check, regression sniff
 - `envoy`: pushes, creates PRs, handles releases (optional terminal step)
 
-## Beads Rules 
+## Secrets
 
-**Note:** `br` is non-invasive and never executes git commands. After `br sync --flush-only`, you must manually run `git add .beads/ && git commit`.
-
-- Use Beads for all work tracking (`br create`, `br update`, `br close`)
-- Do not use markdown files (or TodoWrite/TaskCreate) as a task tracker
-- Keep skills/beads free of secrets (no tokens/keys/seed phrases)
-
-## Quick Reference
-
-```bash
-br ready
-br list --status open
-br show <id>
-br update <id> --status in_progress
-br close <id> --reason "..."
-```
-
-## Shell Snippets (Copy/Paste Safe)
-
-- Avoid literal `\n` tokens between commands (e.g. `br create ...; \nbr update ...`); in zsh/bash, `\nbr` is parsed as `nbr`.
-- Prefer fenced code blocks with real newlines:
-
-```bash
-br create "..."
-br update <id> --status in_progress
-```
-
-- If a single line is required, prefer `&&` or `;` separators:
-
-```bash
-br create "..." && br update <id> --status in_progress
-```
+Keep config, skills, and task bodies free of secrets (no tokens/keys/seed
+phrases). Use `{env:VAR}` interpolation in `opencode.json` instead of literals.
 
 ## Session Close Protocol
 
@@ -67,76 +51,7 @@ This repo commonly works on an ephemeral branch with no upstream. Code is merged
 ```bash
 git status
 git add <files>
-br sync --flush-only
-git add .beads/
 git commit -m "..."
 ```
 
-<!-- bv-agent-instructions-v1 -->
-
----
-
-## Beads Workflow Integration
-
-This project uses [beads_rust](https://github.com/Dicklesworthstone/beads_rust) for issue tracking. Issues are stored in `.beads/` and tracked in git.
-
-**Note:** `br` is non-invasive and never executes git commands. After `br sync --flush-only`, you must manually run `git add .beads/ && git commit`.
-
-### Essential Commands
-
-```bash
-# View issues (launches TUI - avoid in automated sessions)
-bv
-
-# CLI commands for agents (use these instead)
-br ready
-br list --status=open
-br show <id>
-br create --title="..." --type=task --priority=2
-br update <id> --status=in_progress
-br close <id> --reason="Completed"
-br close <id1> <id2>
-br sync --flush-only
-git add .beads/
-git commit -m "sync beads"
-```
-
-### Workflow Pattern
-
-1. Start: Run `br ready` to find actionable work
-2. Claim: Use `br update <id> --status=in_progress`
-3. Work: Implement the task for your role
-4. Complete: Use `br close <id>`
-5. Sync and commit:
-   ```bash
-   br sync --flush-only
-   git add .beads/
-   git commit -m "sync beads"
-   ```
-
-### Key Concepts
-
-- Dependencies: Issues can block other issues. `br ready` shows only unblocked work.
-- Priority: P0=critical, P1=high, P2=medium, P3=low, P4=backlog (use numbers, not words)
-- Types: task, bug, feature, epic, question, docs
-
-### Session Protocol
-
-Before ending any session:
-
-```bash
-git status
-git add <files>
-br sync --flush-only
-git add .beads/
-git commit -m "..."
-```
-
-### Best Practices
-
-- Check `br ready` at session start to find available work
-- Update status as you work (in_progress -> closed)
-- Create new issues with `br create` when you discover follow-ups
-- Always run `br sync --flush-only` followed by `git add .beads/ && git commit` before ending a session
-
-<!-- end-bv-agent-instructions -->
+(Village roles additionally follow the beads sync steps in the `village-workflow` skill.)
