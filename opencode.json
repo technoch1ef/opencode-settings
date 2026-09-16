@@ -1,7 +1,11 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "default_agent": "mayor",
+  // Title/summary generation must not share the meridian proxy session lease
+  // (concurrent turn on the same ses_ id => "session advanced" 400).
+  "small_model": "github-copilot/claude-haiku-4.5",
   "plugin": [
+    "@dietrichgebert/ponytail@4.10.0",
     "@mohak34/opencode-notifier@latest",
     [
       "@technoch1ef/opencode-beads-rust@0.2.0",
