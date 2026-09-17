@@ -45,6 +45,9 @@
     }
   },
   "agent": {
+    "title": {
+      "mode": "subagent"
+    },
     "github": {
       "disable": true
     }
