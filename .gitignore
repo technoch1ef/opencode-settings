@@ -21,3 +21,6 @@ slack_mcp_channels_cache.json
 
 # Private, local-only skills (never tracked)
 skills-private/
+
+# ponytail local state
+.ponytail-active
