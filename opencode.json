@@ -13,7 +13,7 @@
     ],
     "@technoch1ef/opencode-village@0.7.0",
     "opencode-copilot-1m",
-    "opencode-with-claude@1.9.1"
+    "opencode-with-claude@1.10.4"
   ],
   "skills": {
     "paths": ["{env:HOME}/.config/opencode/skills-private"]
