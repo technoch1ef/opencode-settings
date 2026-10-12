@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "default_agent": "mayor",
+  "default_agent": "build",
   // Title/summary generation via meridian proxy. Watch for "session advanced"
   // 400s (concurrent turn on the same ses_ id); if they return, move off-proxy.
   "small_model": "anthropic/claude-haiku-5-5",
