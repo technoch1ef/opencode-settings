@@ -5,7 +5,7 @@
   // 400s (concurrent turn on the same ses_ id); if they return, move off-proxy.
   "small_model": "anthropic/claude-haiku-5-5",
   "plugin": [
-    "@dietrichgebert/ponytail@4.10.0",
+    "@dietrichgebert/ponytail@5.1.0",
     "@mohak34/opencode-notifier@latest",
     [
       "@technoch1ef/opencode-beads-rust@0.2.0",
@@ -13,7 +13,7 @@
     ],
     "@technoch1ef/opencode-village@0.7.0",
     "opencode-copilot-1m",
-    "opencode-with-claude@1.10.4"
+    "opencode-with-claude@1.11.1"
   ],
   "skills": {
     "paths": ["{env:HOME}/.config/opencode/skills-private"]
