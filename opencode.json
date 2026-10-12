@@ -12,7 +12,6 @@
       { "inject": ["mayor", "worker", "guard", "inspector", "envoy"] }
     ],
     "@technoch1ef/opencode-village@0.7.0",
-    "opencode-copilot-1m",
     "opencode-with-claude@1.11.1"
   ],
   "skills": {
