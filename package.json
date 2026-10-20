@@ -6,7 +6,7 @@
     "@opencode-ai/plugin": "1.15.13"
   },
   "devDependencies": {
-    "@technoch1ef/opencode-beads-rust": "^0.1.0",
-    "@technoch1ef/opencode-village": "^0.6.4"
+    "@technoch1ef/opencode-beads-rust": "^1.0.0",
+    "@technoch1ef/opencode-village": "^1.1.1"
   }
 }
