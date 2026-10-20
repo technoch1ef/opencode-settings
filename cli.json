@@ -1,5 +1,11 @@
 {
   "$schema": "https://opencode.ai/v2/cli.json",
+  "plugins": [
+    "./plugins/oc-iterm2"
+  ],
+  "terminal": {
+    "title": false
+  },
   "theme": {
     "name": "astronvim-vivid"
   },
