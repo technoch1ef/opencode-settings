@@ -9,10 +9,10 @@
     "@dietrichgebert/ponytail@5.1.0",
     "@mohak34/opencode-notifier@latest",
     [
-      "@technoch1ef/opencode-beads-rust@0.2.0",
+      "@technoch1ef/opencode-beads-rust@1.0.0",
       { "inject": ["mayor", "worker", "guard", "inspector", "envoy"] }
     ],
-    "@technoch1ef/opencode-village@0.7.0",
+    "@technoch1ef/opencode-village@1.0.0",
     "opencode-with-claude@1.11.1"
   ],
   "skills": {
