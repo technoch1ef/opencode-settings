@@ -228,15 +228,51 @@ function shouldShowAxNode(node, compact = false) {
   return role !== 'none' && role !== 'generic' && !(name === '' && (value === '' || value == null));
 }
 
-function formatAxNode(node, depth) {
+const INTERACTIVE_ROLES = new Set([
+  'button', 'link', 'textbox', 'searchbox', 'combobox', 'checkbox', 'radio', 'switch',
+  'tab', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'option', 'slider',
+  'spinbutton', 'listbox', 'treeitem',
+]);
+// Shown without a ref in interactive snapshots, for orientation.
+const CONTEXT_ROLES = new Set(['heading', 'dialog', 'alertdialog', 'alert', 'status']);
+const STATE_PROPS = new Set(['checked', 'selected', 'expanded', 'pressed', 'disabled', 'required']);
+const OBSERVE_MAX_LINES = 150;
+const SETTLE_QUIET_MS = 300;
+const SETTLE_MAX_MS = 1500;
+
+// Refs (@e1, @e2…) map to backendDOMNodeIds; they stay stable within a
+// document and reset when the main frame navigates.
+function refFor(refs, backendId) {
+  let ref = refs.byBackend.get(backendId);
+  if (!ref) {
+    ref = `e${++refs.n}`;
+    refs.byBackend.set(backendId, ref);
+    refs.byRef.set(ref, backendId);
+  }
+  return ref;
+}
+
+function axState(node) {
+  const out = [];
+  for (const p of node.properties || []) {
+    const v = p.value?.value;
+    if (!STATE_PROPS.has(p.name) || !v || v === 'false') continue;
+    out.push(v === true || v === 'true' ? p.name : `${p.name}=${v}`);
+  }
+  return out.length ? ` (${out.join(', ')})` : '';
+}
+
+function formatAxNode(node, depth, refs) {
   const role = node.role?.value || '';
   const name = node.name?.value ?? '';
   const value = node.value?.value;
   const indent = '  '.repeat(Math.min(depth, 10));
-  let line = `${indent}[${role}]`;
+  const ref = refs && INTERACTIVE_ROLES.has(role) && node.backendDOMNodeId
+    ? `@${refFor(refs, node.backendDOMNodeId)} ` : '';
+  let line = `${indent}${ref}[${role}]`;
   if (name !== '') line += ` ${name}`;
   if (!(value === '' || value == null)) line += ` = ${JSON.stringify(value)}`;
-  return line;
+  return line + axState(node);
 }
 
 function orderedAxChildren(node, nodesById, childrenByParent) {
@@ -258,8 +294,8 @@ function orderedAxChildren(node, nodesById, childrenByParent) {
   return children;
 }
 
-async function snapshotStr(cdp, sid, compact = false) {
-  const { nodes } = await cdp.send('Accessibility.getFullAXTree', {}, sid);
+// AX nodes in document order, as [node, depth] pairs
+function axInOrder(nodes) {
   const nodesById = new Map(nodes.map(node => [node.nodeId, node]));
   const childrenByParent = new Map();
   for (const node of nodes) {
@@ -268,12 +304,12 @@ async function snapshotStr(cdp, sid, compact = false) {
     childrenByParent.get(node.parentId).push(node);
   }
 
-  const lines = [];
+  const out = [];
   const visited = new Set();
   function visit(node, depth) {
     if (!node || visited.has(node.nodeId)) return;
     visited.add(node.nodeId);
-    if (shouldShowAxNode(node, compact)) lines.push(formatAxNode(node, depth));
+    out.push([node, depth]);
     for (const child of orderedAxChildren(node, nodesById, childrenByParent)) {
       visit(child, depth + 1);
     }
@@ -282,8 +318,132 @@ async function snapshotStr(cdp, sid, compact = false) {
   const roots = nodes.filter(node => !node.parentId || !nodesById.has(node.parentId));
   for (const root of roots) visit(root, 0);
   for (const node of nodes) visit(node, 0);
+  return out;
+}
 
-  return lines.join('\n');
+async function snapshotStr(cdp, sid, refs) {
+  const { nodes } = await cdp.send('Accessibility.getFullAXTree', {}, sid);
+  return axInOrder(nodes)
+    .filter(([node]) => shouldShowAxNode(node, true))
+    .map(([node, depth]) => formatAxNode(node, depth, refs))
+    .join('\n');
+}
+
+// shortcut: main frame only (AX tree skips iframe content), use clickxy/type inside iframes.
+async function interactiveLines(cdp, sid, refs) {
+  const { nodes } = await cdp.send('Accessibility.getFullAXTree', {}, sid);
+  const ordered = axInOrder(nodes);
+  const lines = [];
+  ordered.forEach(([node, depth], i) => {
+    if (node.ignored) return;
+    const role = node.role?.value || '';
+    if (INTERACTIVE_ROLES.has(role)) {
+      if (node.backendDOMNodeId) lines.push(formatAxNode(node, 0, refs));
+    } else if ((role === 'status' || role === 'alert') && !node.name?.value) {
+      // Live regions (toasts, "Saved") carry their message as text, not a name
+      const text = [];
+      for (let j = i + 1; j < ordered.length && ordered[j][1] > depth; j++) {
+        if (ordered[j][0].role?.value === 'StaticText') text.push(ordered[j][0].name?.value ?? '');
+      }
+      if (text.join('').trim()) lines.push(`[${role}] ${text.join(' ').trim()}`);
+    } else if (CONTEXT_ROLES.has(role) && shouldShowAxNode(node, true)) {
+      lines.push(formatAxNode(node, 0, refs));
+    }
+  });
+  return lines;
+}
+
+function capLines(lines) {
+  if (lines.length <= OBSERVE_MAX_LINES) return lines.join('\n');
+  return [...lines.slice(0, OBSERVE_MAX_LINES),
+    `… ${lines.length - OBSERVE_MAX_LINES} more — run snap -i for all`].join('\n');
+}
+
+async function resolveBackendId(cdp, sid, refs, target) {
+  if (!target) throw new Error('@ref or CSS selector required');
+  if (target.startsWith('@')) {
+    const id = refs.byRef.get(target.slice(1));
+    if (!id) throw new Error(`Unknown ref ${target} — run snap -i again`);
+    return id;
+  }
+  const res = await cdp.send('Runtime.evaluate', {
+    expression: `document.querySelector(${JSON.stringify(target)})`,
+  }, sid);
+  if (res.exceptionDetails) throw new Error(`Bad selector: ${target}`);
+  if (!res.result.objectId) throw new Error(`Element not found: ${target}`);
+  const { node } = await cdp.send('DOM.describeNode', { objectId: res.result.objectId }, sid);
+  return node.backendNodeId;
+}
+
+// Call `fn` (a function source string) with `this` bound to the element
+async function callOn(cdp, sid, backendNodeId, fn, args = []) {
+  let object;
+  try {
+    ({ object } = await cdp.send('DOM.resolveNode', { backendNodeId }, sid));
+  } catch {
+    throw new Error('Element is gone (page changed) — run snap -i again');
+  }
+  const res = await cdp.send('Runtime.callFunctionOn', {
+    objectId: object.objectId, functionDeclaration: fn,
+    arguments: args.map(value => ({ value })), returnByValue: true,
+  }, sid);
+  if (res.exceptionDetails) {
+    throw new Error(res.exceptionDetails.exception?.description || res.exceptionDetails.text);
+  }
+  return res.result.value;
+}
+
+// Wait until the DOM stops mutating (or SETTLE_MAX_MS passes)
+async function settle(cdp, sid) {
+  await evalStr(cdp, sid, `new Promise(resolve => {
+    const done = () => { mo.disconnect(); clearTimeout(t); clearTimeout(cap); resolve(true); };
+    const mo = new MutationObserver(() => { clearTimeout(t); t = setTimeout(done, ${SETTLE_QUIET_MS}); });
+    let t = setTimeout(done, ${SETTLE_QUIET_MS});
+    const cap = setTimeout(done, ${SETTLE_MAX_MS});
+    mo.observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
+  })`).catch(() => {});
+}
+
+// Run an action, wait for the page to react, and report what changed in the
+// interactive snapshot, so the agent needs no separate snap turn.
+async function act(cdp, sid, refs, fn) {
+  const before = await interactiveLines(cdp, sid, refs).catch(() => []);
+  const urlBefore = await evalStr(cdp, sid, 'location.href').catch(() => '');
+  const { frameTree } = await cdp.send('Page.getFrameTree', {}, sid);
+  const mainFrame = frameTree.frame.id;
+
+  let navigating = false;
+  let loaded;
+  const loadedPromise = new Promise(r => { loaded = r; });
+  const offs = [
+    cdp.onEvent('Page.frameStartedLoading', p => { if (p.frameId === mainFrame) navigating = true; }),
+    cdp.onEvent('Page.domContentEventFired', () => loaded()),
+    // Fires for aborted navigations and downloads, which never reach DCL
+    cdp.onEvent('Page.frameStoppedLoading', p => { if (p.frameId === mainFrame) loaded(); }),
+  ];
+
+  let result;
+  try {
+    result = await fn();
+    await sleep(150);
+    if (navigating) await Promise.race([loadedPromise, sleep(NAVIGATION_TIMEOUT)]);
+  } finally {
+    offs.forEach(off => off());
+  }
+  await settle(cdp, sid);
+  return `${result}\n${await observe(cdp, sid, refs, before, urlBefore)}`;
+}
+
+async function observe(cdp, sid, refs, before, urlBefore) {
+  const [title, url] = JSON.parse(await evalStr(cdp, sid, 'JSON.stringify([document.title, location.href])'));
+  const after = await interactiveLines(cdp, sid, refs);
+  if (url !== urlBefore) return `Page: ${title} — ${url}\n${capLines(after)}`;
+  const beforeSet = new Set(before);
+  const afterSet = new Set(after);
+  const added = after.filter(line => !beforeSet.has(line));
+  const removed = before.filter(line => !afterSet.has(line)).length;
+  if (!added.length && !removed) return 'No change in interactive elements.';
+  return `Changes: +${added.length} -${removed}\n${capLines(added)}`;
 }
 
 async function evalStr(cdp, sid, expression) {
@@ -343,30 +503,6 @@ async function htmlStr(cdp, sid, selector) {
   return evalStr(cdp, sid, expr);
 }
 
-async function waitForDocumentReady(cdp, sid, timeoutMs = NAVIGATION_TIMEOUT) {
-  const deadline = Date.now() + timeoutMs;
-  let lastState = '';
-  let lastError;
-  while (Date.now() < deadline) {
-    try {
-      const state = await evalStr(cdp, sid, 'document.readyState');
-      lastState = state;
-      if (state === 'complete') return;
-    } catch (e) {
-      lastError = e;
-    }
-    await sleep(200);
-  }
-
-  if (lastState) {
-    throw new Error(`Timed out waiting for navigation to finish (last readyState: ${lastState})`);
-  }
-  if (lastError) {
-    throw new Error(`Timed out waiting for navigation to finish (${lastError.message})`);
-  }
-  throw new Error('Timed out waiting for navigation to finish');
-}
-
 async function navStr(cdp, sid, url) {
   try {
     const parsed = new URL(url);
@@ -377,18 +513,19 @@ async function navStr(cdp, sid, url) {
     throw new Error(`Invalid URL: ${url}`);
   }
   await cdp.send('Page.enable', {}, sid);
-  const loadEvent = cdp.waitForEvent('Page.loadEventFired', NAVIGATION_TIMEOUT);
+  // DOMContentLoaded, not load: act() then waits for the DOM to settle,
+  // which skips waiting on ads/trackers/images.
+  const domReady = cdp.waitForEvent('Page.domContentEventFired', NAVIGATION_TIMEOUT);
   const result = await cdp.send('Page.navigate', { url }, sid);
   if (result.errorText) {
-    loadEvent.cancel();
+    domReady.cancel();
     throw new Error(result.errorText);
   }
   if (result.loaderId) {
-    await loadEvent.promise;
+    await domReady.promise;
   } else {
-    loadEvent.cancel();
+    domReady.cancel();
   }
-  await waitForDocumentReady(cdp, sid, 5000);
   return `Navigated to ${url}`;
 }
 
@@ -402,22 +539,95 @@ async function netStr(cdp, sid) {
   ).join('\n');
 }
 
-// Click element by CSS selector
-async function clickStr(cdp, sid, selector) {
-  if (!selector) throw new Error('CSS selector required');
-  const expr = `
-    (function() {
-      const el = document.querySelector(${JSON.stringify(selector)});
-      if (!el) return { ok: false, error: 'Element not found: ' + ${JSON.stringify(selector)} };
-      el.scrollIntoView({ block: 'center' });
-      el.click();
-      return { ok: true, tag: el.tagName, text: el.textContent.trim().substring(0, 80) };
-    })()
-  `;
-  const result = await evalStr(cdp, sid, expr);
-  const r = JSON.parse(result);
-  if (!r.ok) throw new Error(r.error);
-  return `Clicked <${r.tag}> "${r.text}"`;
+// Click element by @ref or CSS selector. Uses real mouse events (so
+// pointerdown-driven menus work), falling back to el.click() when the
+// element is covered or has no box.
+async function clickStr(cdp, sid, refs, target) {
+  const backendNodeId = await resolveBackendId(cdp, sid, refs, target);
+  const label = await callOn(cdp, sid, backendNodeId, `function() {
+    this.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
+    const text = (this.innerText || this.value || this.getAttribute('aria-label') || '').trim();
+    return '<' + this.tagName + '> "' + text.substring(0, 80) + '"';
+  }`);
+  let point;
+  try {
+    const { quads } = await cdp.send('DOM.getContentQuads', { backendNodeId }, sid);
+    const q = quads[0];
+    if (q) point = { x: (q[0] + q[2] + q[4] + q[6]) / 4, y: (q[1] + q[3] + q[5] + q[7]) / 4 };
+  } catch {}
+  const hit = point && await callOn(cdp, sid, backendNodeId, `function(x, y) {
+    const e = this.getRootNode().elementFromPoint(x, y);
+    return !!e && (e === this || this.contains(e) || e.contains(this));
+  }`, [point.x, point.y]);
+  if (hit) {
+    await clickXyStr(cdp, sid, point.x, point.y);
+    return `Clicked ${label}`;
+  }
+  await callOn(cdp, sid, backendNodeId, 'function() { this.click(); }');
+  return `Clicked ${label} (JS click: element covered or not rendered)`;
+}
+
+// Replace a field's value (or pick a <select> option by value or label)
+async function fillStr(cdp, sid, refs, target, text = '') {
+  const backendNodeId = await resolveBackendId(cdp, sid, refs, target);
+  const kind = await callOn(cdp, sid, backendNodeId, `function(text) {
+    this.scrollIntoView({ block: 'center', behavior: 'instant' });
+    if (this.tagName === 'SELECT') {
+      const opt = [...this.options].find(o => o.value === text || o.text.trim() === text);
+      if (!opt) return 'no-option';
+      this.value = opt.value;
+      this.dispatchEvent(new Event('input', { bubbles: true }));
+      this.dispatchEvent(new Event('change', { bubbles: true }));
+      return 'select';
+    }
+    this.focus();
+    if (typeof this.select === 'function') this.select();
+    else if (this.isContentEditable) getSelection().selectAllChildren(this);
+    return 'text';
+  }`, [text]);
+  if (kind === 'no-option') throw new Error(`No option "${text}" in ${target}`);
+  if (kind === 'select') return `Selected "${text}" in ${target}`;
+  // insertText replaces the selection and fires real input events (React-safe)
+  if (text) await cdp.send('Input.insertText', { text }, sid);
+  else await pressStr(cdp, sid, 'Backspace');
+  return `Filled ${target}`;
+}
+
+const KEYS = {
+  Enter: [13, '\r'], Tab: [9, ''], Escape: [27, ''], Backspace: [8, ''],
+  ArrowDown: [40, ''], ArrowUp: [38, ''],
+};
+
+async function pressStr(cdp, sid, key) {
+  const k = KEYS[key];
+  if (!k) throw new Error(`Unsupported key "${key}" (use ${Object.keys(KEYS).join(', ')})`);
+  const [keyCode, text] = k;
+  const base = { key, code: key, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode };
+  await cdp.send('Input.dispatchKeyEvent', { ...base, type: text ? 'keyDown' : 'rawKeyDown', ...(text && { text }) }, sid);
+  await cdp.send('Input.dispatchKeyEvent', { ...base, type: 'keyUp' }, sid);
+  return `Pressed ${key}`;
+}
+
+// Run several actions in one call; JSON array of [cmd, ...args]
+async function batchStr(cdp, sid, actions, json) {
+  let steps;
+  try { steps = JSON.parse(json); } catch { steps = null; }
+  if (!Array.isArray(steps) || !steps.every(Array.isArray)) {
+    throw new Error('batch expects a JSON array of [cmd, ...args], e.g. [["fill","@e3","hi"],["click","@e4"]]');
+  }
+  const log = [];
+  for (const [cmd, ...args] of steps) {
+    const step = actions[cmd];
+    try {
+      if (!step) throw new Error(`unsupported in batch (use ${Object.keys(actions).join(', ')})`);
+      log.push(await step(...args));
+    } catch (e) {
+      log.push(`✗ Step ${log.length + 1} (${cmd}) failed: ${e.message}. Remaining steps skipped.`);
+      break;
+    }
+    await settle(cdp, sid);
+  }
+  return log.join('\n');
 }
 
 // Click at CSS pixel coordinates using Input.dispatchMouseEvent
@@ -526,6 +736,25 @@ async function runDaemon(targetId) {
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
 
+  // Element refs, reset when the main frame navigates to a new document
+  const refs = { byBackend: new Map(), byRef: new Map(), n: 0 };
+  cdp.onEvent('Page.frameNavigated', ({ frame }) => {
+    if (frame.parentId) return;
+    refs.byBackend.clear(); refs.byRef.clear(); refs.n = 0;
+  });
+  await cdp.send('Page.enable', {}, sessionId).catch(() => {});
+
+  // Commands that run through act() and report what changed
+  const actions = {
+    nav: (url) => navStr(cdp, sessionId, url),
+    click: (target) => clickStr(cdp, sessionId, refs, target),
+    clickxy: (x, y) => clickXyStr(cdp, sessionId, x, y),
+    fill: (target, text) => fillStr(cdp, sessionId, refs, target, text),
+    type: (text) => typeStr(cdp, sessionId, text),
+    press: (key) => pressStr(cdp, sessionId, key),
+  };
+  actions.navigate = actions.nav;
+
   // Idle timer
   let idleTimer = setTimeout(shutdown, IDLE_TIMEOUT);
   function resetIdle() {
@@ -549,15 +778,19 @@ async function runDaemon(targetId) {
           result = JSON.stringify(pages);
           break;
         }
-        case 'snap': case 'snapshot': result = await snapshotStr(cdp, sessionId, true); break;
+        case 'snap': case 'snapshot':
+          result = ['-i', '--interactive'].includes(args[0])
+            ? (await interactiveLines(cdp, sessionId, refs)).join('\n')
+            : await snapshotStr(cdp, sessionId, refs);
+          break;
         case 'eval': result = await evalStr(cdp, sessionId, args[0]); break;
         case 'shot': case 'screenshot': result = await shotStr(cdp, sessionId, args[0], targetId); break;
         case 'html': result = await htmlStr(cdp, sessionId, args[0]); break;
-        case 'nav': case 'navigate': result = await navStr(cdp, sessionId, args[0]); break;
         case 'net': case 'network': result = await netStr(cdp, sessionId); break;
-        case 'click': result = await clickStr(cdp, sessionId, args[0]); break;
-        case 'clickxy': result = await clickXyStr(cdp, sessionId, args[0], args[1]); break;
-        case 'type': result = await typeStr(cdp, sessionId, args[0]); break;
+        case 'nav': case 'navigate': case 'click': case 'clickxy': case 'fill': case 'type': case 'press':
+          result = await act(cdp, sessionId, refs, () => actions[cmd](...args));
+          break;
+        case 'batch': result = await act(cdp, sessionId, refs, () => batchStr(cdp, sessionId, actions, args[0])); break;
         case 'loadall': result = await loadAllStr(cdp, sessionId, args[0], args[1] ? parseInt(args[1]) : 1500); break;
         case 'evalraw': result = await evalRawStr(cdp, sessionId, args[0], args[1]); break;
         case 'stop': return { ok: true, result: '', stopAfter: true };
@@ -725,16 +958,26 @@ const USAGE = `cdp - lightweight Chrome DevTools Protocol CLI (no Puppeteer)
 Usage: cdp <command> [args]
 
   list                              List open pages (shows unique target prefixes)
-  snap  <target>                    Accessibility tree snapshot
+  snap  <target> [-i]               Accessibility tree snapshot; interactive elements get
+                                    @refs. -i: only interactive elements + headings/dialogs
   eval  <target> <expr>             Evaluate JS expression
   shot  <target> [file]             Screenshot (default: screenshot-<target>.png in runtime dir); prints coordinate mapping
   html  <target> [selector]         Get HTML (full page or CSS selector)
-  nav   <target> <url>              Navigate to URL and wait for load completion
   net   <target>                    Network performance entries
-  click   <target> <selector>       Click an element by CSS selector
+
+  Actions — each waits for the page to settle, then prints what changed
+  (new page: full interactive snapshot; same page: added lines + removed count):
+  nav     <target> <url>            Navigate to URL (waits for DOMContentLoaded)
+  click   <target> <@ref|selector>  Click an element (real mouse events)
+  fill    <target> <@ref|selector> <text>
+                                    Replace a field's value; for <select>, pick option by value or label
+  press   <target> <key>            Enter, Tab, Escape, Backspace, ArrowDown, ArrowUp
   clickxy <target> <x> <y>          Click at CSS pixel coordinates (see coordinate note below)
   type    <target> <text>           Type text at current focus via Input.insertText
                                     Works in cross-origin iframes unlike eval-based approaches
+  batch   <target> <json>           Run several actions in one call, observe once at the end
+                                    e.g. batch <t> '[["fill","@e3","bob"],["fill","@e4","hi"],["click","@e5"]]'
+
   loadall <target> <selector> [ms]  Repeatedly click a "load more" button until it disappears
                                     Optional interval in ms between clicks (default 1500)
   evalraw <target> <method> [json]  Send a raw CDP command; returns JSON result
@@ -770,13 +1013,13 @@ DAEMON IPC (for advanced use / scripting)
     Response: {"id":<number>, "ok":true,  "result":"<string>"}
            or {"id":<number>, "ok":false, "error":"<message>"}
   Commands mirror the CLI: snap, eval, shot, html, nav, net, click, clickxy,
-  type, loadall, evalraw, stop. Use evalraw to send arbitrary CDP methods.
+  fill, press, type, batch, loadall, evalraw, stop. Use evalraw to send arbitrary CDP methods.
   The socket disappears after 20 min of inactivity or when the tab closes.
 `;
 
 const NEEDS_TARGET = new Set([
   'snap','snapshot','eval','shot','screenshot','html','nav','navigate',
-  'net','network','click','clickxy','type','loadall','evalraw',
+  'net','network','click','clickxy','type','loadall','evalraw','fill','press','batch',
 ]);
 
 async function main() {
@@ -853,11 +1096,15 @@ async function main() {
     const expr = cmdArgs.join(' ');
     if (!expr) { console.error('Error: expression required'); process.exit(1); }
     cmdArgs[0] = expr;
-  } else if (cmd === 'type') {
-    // Join all remaining args as text (allows spaces)
+  } else if (cmd === 'type' || cmd === 'batch') {
+    // Join all remaining args (allows spaces)
     const text = cmdArgs.join(' ');
-    if (!text) { console.error('Error: text required'); process.exit(1); }
-    cmdArgs[0] = text;
+    if (!text) { console.error(`Error: ${cmd === 'batch' ? 'JSON steps' : 'text'} required`); process.exit(1); }
+    cmdArgs.length = 0;
+    cmdArgs.push(text);
+  } else if (cmd === 'fill') {
+    if (!cmdArgs[0]) { console.error('Error: @ref or selector required'); process.exit(1); }
+    cmdArgs.splice(1, cmdArgs.length, cmdArgs.slice(1).join(' '));
   } else if (cmd === 'evalraw') {
     // args: [method, ...jsonParts] — join json parts in case of spaces
     if (!cmdArgs[0]) { console.error('Error: CDP method required'); process.exit(1); }
