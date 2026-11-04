@@ -14,7 +14,7 @@
     "view": "auto"
   },
   "session": {
-    "sidebar": "auto",
+    "sidebar": "hide",
     "scrollbar": false,
     "thinking": "show"
   },
